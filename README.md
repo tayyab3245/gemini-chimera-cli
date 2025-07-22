@@ -1,183 +1,216 @@
-# Gemini CLI
+# Gemini Chimera CLI: Hierarchical AI Coding Assistant
 
-[![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
+```
+ ██████╗ ███████╗███╗   ███╗██╗███╗   ██╗██╗    ██████╗██╗  ██╗██╗███╗   ███╗███████╗██████╗  █████╗     ██████╗██╗     ██╗
+██╔════╝ ██╔════╝████╗ ████║██║████╗  ██║██║   ██╔════╝██║  ██║██║████╗ ████║██╔════╝██╔══██╗██╔══██╗   ██╔════╝██║     ██║
+██║  ███╗█████╗  ██╔████╔██║██║██╔██╗ ██║██║   ██║     ███████║██║██╔████╔██║█████╗  ██████╔╝███████║   ██║     ██║     ██║
+██║   ██║██╔══╝  ██║╚██╔╝██║██║██║╚██╗██║██║   ██║     ██╔══██║██║██║╚██╔╝██║██╔══╝  ██╔══██╗██╔══██║   ██║     ██║     ██║
+╚██████╔╝███████╗██║ ╚═╝ ██║██║██║ ╚████║██║   ╚██████╗██║  ██║██║██║ ╚═╝ ██║███████╗██║  ██║██║  ██║   ╚██████╗███████╗██║
+ ╚═════╝ ╚══════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝    ╚═════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝    ╚═════╝╚══════╝╚═╝
+                                                                                                                              
+                                    Experimental Multi-Agent AI Development System
+```
 
-![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+[![Gemini CLI](https://img.shields.io/badge/built%20on-Gemini%20CLI-orange.svg)](https://github.com/google-gemini/gemini-cli)
 
-This repository contains the Gemini CLI, a command-line AI workflow tool that connects to your
-tools, understands your code and accelerates your workflows.
+## Overview
 
-With the Gemini CLI you can:
+Project Chimera is an experimental extension to Google's Gemini CLI that implements a hierarchical multi-agent system for AI-assisted software development. Instead of relying on a single AI agent, it orchestrates multiple specialized agents (Master, Architect, Implementer, Critic) to handle complex coding tasks with better context retention and quality control.
 
-- Query and edit large codebases in and beyond Gemini's 1M token context window.
-- Generate new apps from PDFs or sketches, using Gemini's multimodal capabilities.
-- Automate operational tasks, like querying pull requests or handling complex rebases.
-- Use tools and MCP servers to connect new capabilities, including [media generation with Imagen,
-  Veo or Lyria](https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio/tree/main/experiments/mcp-genmedia)
-- Ground your queries with the [Google Search](https://ai.google.dev/gemini-api/docs/grounding)
-  tool, built into Gemini.
+**Status**: Early MVP - functional but not production-ready
 
-## Quickstart
+## The Problem This Addresses
 
-You have two options to install Gemini CLI.
+Traditional AI coding assistants suffer from several limitations when handling complex, multi-file projects:
 
-### With Node
+- **Context Loss**: LLMs struggle to maintain high-level architectural goals across extended interactions
+- **Inconsistent Quality**: No systematic review process for generated code
+- **Manual Oversight**: Developers must constantly validate and correct AI outputs
+- **Architectural Drift**: No mechanism to prevent contradictions or regressions
 
-1. **Prerequisites:** Ensure you have [Node.js version 20](https://nodejs.org/en/download) or higher installed.
-2. **Run the CLI:** Execute the following command in your terminal:
+## Approach: Hierarchical Multi-Agent System
 
+Project Chimera addresses these issues by creating specialized AI agents with distinct roles:
+
+- **Master Agent**: Interprets user requests and manages workflow routing
+- **Architect Agent**: Creates structured plans with JSON schema validation
+- **Implementer Agent**: Executes file operations and code generation using Gemini CLI tools
+- **Critic Agent**: Reviews output quality against the original plan
+
+Each agent maintains isolated conversation context to prevent cross-contamination of reasoning.
+
+## Current Implementation Status
+
+### Core Agent Roles
+
+**Master Agent** - Request Processing & Workflow Orchestration
+- Routes complex tasks to multi-agent pipeline
+- Falls back to single-agent mode for simple requests
+- Maintains conversation history
+
+**Architect Agent** - Strategic Planning & JSON Schema Compliance  
+- Generates structured `ChimeraPlan` objects validated against JSON schema
+- Implements retry mechanisms for invalid JSON output
+- Maintains architectural consistency through persistent plan state
+
+**Implementer Agent** - Tool Execution & Artifact Generation
+- Executes file system operations via Gemini CLI tools
+- Includes "nudge" mechanism to encourage tool usage over plain text
+- Returns structured execution reports
+
+**Critic Agent** - Quality Assurance & Plan Validation
+- Reviews Implementer output against Architect's plan
+- Currently generates structured feedback (full review loop not yet implemented)
+
+### Real-Time Debugging System
+
+Basic telemetry system provides workflow visibility:
+
+```
+[12:34:56.789] MASTER complex task detected - activating multi-agent workflow
+[12:34:57.123] ARCHITECT generating strategic plan...
+[12:34:58.456] IMPLEMENTER executing step 1/3: create project structure  
+[12:34:59.789] CRITIC reviewing implementation quality...
+```
+
+Enable with: `export CHIMERA_DEBUG=1`
+
+### Agent Communication Flow
+
+```mermaid
+graph TD
+    A[Master Agent] --> B[Architect Agent]
+    B --> C[Implementer Agent]
+    C --> D[Critic Agent]
+    D --> E{Quality Check}
+    E -->|Pass| F[Success]
+    E -->|Fail| B
+    
+    B --> G[Plan Persistence]
+    C --> H[Tool Execution]
+    D --> I[Quality Review]
+```
+
+## Development Progress
+
+### Phase 1: Core Architecture & Integration
+**Objective**: Establish multi-agent orchestration within Gemini CLI
+
+**Completed**:
+- `ChimeraOrchestrator` extends `GeminiChat` for API compatibility
+- Isolated agent instances with separate conversation histories
+- Backward compatibility with existing CLI workflows
+
+### Phase 2: Schema-Driven Communication
+**Objective**: Implement structured inter-agent communication
+
+**Completed**:
+- `ChimeraPlan` and `CriticReview` TypeScript interfaces
+- JSON schema validation with automatic retry mechanisms
+- Error handling for malformed agent outputs
+
+### Phase 3: JSON Generation Reliability
+**Objective**: Improve Architect agent's JSON output consistency
+
+**Completed**:
+- Streamlined agent prompts to reduce verbose responses
+- JSON-first input approach using `JSON.stringify()`
+- Enhanced error handling with markdown cleanup
+
+### Phase 4: Tool Execution & File System Integration
+**Objective**: Enable real-world code execution
+
+**Completed**:
+- `_runImplementerStep` method for orchestrating tool calls
+- "Nudge" mechanism to prompt tool usage
+- Structured execution reporting with error details
+
+### Phase 5: Observability & Debugging
+**Objective**: Add workflow visibility
+
+**Completed**:
+- Real-time colored telemetry with timestamps
+- Environment-controlled debug output via `CHIMERA_DEBUG`
+- Persistent plan state in `.chimera/plan.json`
+
+## Technical Architecture
+
+```
+packages/core/src/
+├── core/
+│   ├── chimeraOrchestrator.ts     # Main multi-agent orchestrator
+│   └── index.ts                   # Modified to use ChimeraOrchestrator
+├── interfaces/
+│   └── chimera.ts                 # ChimeraPlan and CriticReview types
+└── schemas/
+    └── chimeraPlan.schema.json    # ChimeraPlan validation schema
+```
+
+## Installation & Usage
+
+### Prerequisites
+- Node.js version 20 or higher
+- Google Gemini CLI configured with API keys
+
+### Setup
+1. Clone this repository:
    ```bash
-   npx https://github.com/google-gemini/gemini-cli
+   git clone https://github.com/tayyab3245/gemini-cli
+   cd gemini-cli
    ```
 
-   Or install it with:
-
+2. Install dependencies:
    ```bash
-   npm install -g @google/gemini-cli
+   npm install
    ```
 
-   Then, run the CLI from anywhere:
-
+3. Build the project:
    ```bash
-   gemini
+   npm run build
    ```
 
-### With Homebrew
-
-1. **Prerequisites:** Ensure you have [Homebrew](https://brew.sh/) installed.
-2. **Install the CLI** Execute the following command in your terminal:
-
+4. Enable debug telemetry (optional):
    ```bash
-   brew install gemini-cli
+   export CHIMERA_DEBUG=1
    ```
 
-   Then, run the CLI from anywhere:
-
-   ```bash
-   gemini
-   ```
-
-### Common Configuration steps
-
-3. **Pick a color theme**
-4. **Authenticate:** When prompted, sign in with your personal Google account. This will grant you up to 60 model requests per minute and 1,000 model requests per day using Gemini.
-
-You are now ready to use the Gemini CLI!
-
-### Use a Gemini API key:
-
-The Gemini API provides a free tier with [100 requests per day](https://ai.google.dev/gemini-api/docs/rate-limits#free-tier) using Gemini 2.5 Pro, control over which model you use, and access to higher rate limits (with a paid plan):
-
-1. Generate a key from [Google AI Studio](https://aistudio.google.com/apikey).
-2. Set it as an environment variable in your terminal. Replace `YOUR_API_KEY` with your generated key.
-
-   ```bash
-   export GEMINI_API_KEY="YOUR_API_KEY"
-   ```
-
-3. (Optionally) Upgrade your Gemini API project to a paid plan on the API key page (will automatically unlock [Tier 1 rate limits](https://ai.google.dev/gemini-api/docs/rate-limits#tier-1))
-
-### Use a Vertex AI API key:
-
-The Vertex AI API provides a [free tier](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview) using express mode for Gemini 2.5 Pro, control over which model you use, and access to higher rate limits with a billing account:
-
-1. Generate a key from [Google Cloud](https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys).
-2. Set it as an environment variable in your terminal. Replace `YOUR_API_KEY` with your generated key and set GOOGLE_GENAI_USE_VERTEXAI to true
-
-   ```bash
-   export GOOGLE_API_KEY="YOUR_API_KEY"
-   export GOOGLE_GENAI_USE_VERTEXAI=true
-   ```
-
-3. (Optionally) Add a billing account on your project to get access to [higher usage limits](https://cloud.google.com/vertex-ai/generative-ai/docs/quotas)
-
-For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
-
-## Examples
-
-Once the CLI is running, you can start interacting with Gemini from your shell.
-
-You can start a project from a new directory:
-
-```sh
-cd new-project/
+### Basic Usage
+```bash
+# Start Chimera-enabled Gemini CLI
 gemini
-> Write me a Gemini Discord bot that answers questions using a FAQ.md file I will provide
+
+# Complex tasks trigger multi-agent workflow
+> Create a TypeScript project with express server and user authentication
+
+# Simple tasks use single agent
+> What is the current date?
 ```
 
-Or work with an existing project:
+## Known Limitations & Future Work
 
-```sh
-git clone https://github.com/google-gemini/gemini-cli
-cd gemini-cli
-gemini
-> Give me a summary of all of the changes that went in yesterday
-```
+### Current Limitations
+- **Critic Loop**: Quality review feedback not yet fully integrated into plan modification
+- **Tool Support**: Limited to Gemini CLI's existing tool set
+- **Error Recovery**: Basic retry mechanisms, needs more sophisticated error handling
+- **Performance**: No benchmarking or optimization yet
 
-### Next steps
+### Planned Improvements
+- Complete Critic agent feedback integration
+- Comprehensive evaluation harness to measure effectiveness
+- VS Code extension for visual workflow monitoring
+- Enhanced tool integration (Python interpreter, linters, etc.)
+- Performance optimization and caching
 
-- Learn how to [contribute to or build from the source](./CONTRIBUTING.md).
-- Explore the available **[CLI Commands](./docs/cli/commands.md)**.
-- If you encounter any issues, review the **[troubleshooting guide](./docs/troubleshooting.md)**.
-- For more comprehensive documentation, see the [full documentation](./docs/index.md).
-- Take a look at some [popular tasks](#popular-tasks) for more inspiration.
-- Check out our **[Official Roadmap](./ROADMAP.md)**
 
-### Troubleshooting
 
-Head over to the [troubleshooting guide](docs/troubleshooting.md) if you're
-having issues.
 
-## Popular tasks
 
-### Explore a new codebase
+## License
 
-Start by `cd`ing into an existing or newly-cloned repository and running `gemini`.
+Built on [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) - Apache License 2.0
 
-```text
-> Describe the main pieces of this system's architecture.
-```
+---
 
-```text
-> What security mechanisms are in place?
-```
-
-### Work with your existing code
-
-```text
-> Implement a first draft for GitHub issue #123.
-```
-
-```text
-> Help me migrate this codebase to the latest version of Java. Start with a plan.
-```
-
-### Automate your workflows
-
-Use MCP servers to integrate your local system tools with your enterprise collaboration suite.
-
-```text
-> Make me a slide deck showing the git history from the last 7 days, grouped by feature and team member.
-```
-
-```text
-> Make a full-screen web app for a wall display to show our most interacted-with GitHub issues.
-```
-
-### Interact with your system
-
-```text
-> Convert all the images in this directory to png, and rename them to use dates from the exif data.
-```
-
-```text
-> Organize my PDF invoices by month of expenditure.
-```
-
-### Uninstall
-
-Head over to the [Uninstall](docs/Uninstall.md) guide for uninstallation instructions.
-
-## Terms of Service and Privacy Notice
-
-For details on the terms of service and privacy notice applicable to your use of Gemini CLI, see the [Terms of Service and Privacy Notice](./docs/tos-privacy.md).
+**Note**: This is experimental software. While functional for basic multi-file projects, it's not recommended for production use.

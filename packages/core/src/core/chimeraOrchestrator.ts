@@ -26,6 +26,7 @@ import { ToolResult } from '../tools/tools.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { validateJson } from '../utils/jsonValidator.js';
 import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
+import { chimeraLog } from '../utils/chimeraLogger.js';
 
 // -----------------------------------------------------------------------------
 // 🛠️  Tool‑call execution helper
@@ -128,12 +129,21 @@ export class ChimeraOrchestrator extends GeminiChat {
       contentGenerator,
       {
         ...generationConfig,
-        systemInstruction: { role: 'system', parts: [{ text: 'You are the Master Agent. Clarify user intent and rewrite explicitly.' }] },
+        systemInstruction: {
+          role: 'system',
+          parts: [
+            {
+              text:
+                'You are the Master agent. Your ONLY task is to restate the user\'s ' +
+                'request as one concise, explicit sentence – no commentary, no "thoughts".'
+            },
+          ],
+        },
       },
       [],
     ); // Create separate Master agent instead of circular reference
     this.architectAgentChat = mk(
-      'You are the Architect Agent. Output ONLY ChimeraPlan JSON.',
+      'You are the Architect agent. Produce ONLY valid ChimeraPlan JSON – nothing else.',
     );
     this.implementerAgentChat = mk(
       'You are the Implementer Agent. Execute a single PlanStep.',
@@ -151,29 +161,7 @@ export class ChimeraOrchestrator extends GeminiChat {
     }).catch(() => { /* silent */ });
   }
 
-  /* ------------------------------------------------------------------ */
-  /* One‑shot banner so you can SEE which internal agents are alive     */
-  /* ------------------------------------------------------------------ */
-  private bannerShown = false;
-  private logBanner() {
-    if (this.bannerShown) return;
-    this.bannerShown = true;
 
-    const names = {
-      master:        'You are the Master Agent. Clarify user intent and rewrite explicitly.',
-      architect:     'You are the Architect Agent. Output ONLY ChimeraPlan JSON.',
-      implementer:   'You are the Implementer Agent. Execute a single PlanStep.',
-      critic:        'You are the Critic Agent. Return ONLY CriticReview JSON.',
-    };
-    console.log('\n🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲');
-    console.log('┌─────────────────────────────────────────────────────────');
-    console.log('│ 🐲  Project Chimera – internal agents online');
-    for (const [k,v] of Object.entries(names)) {
-      console.log(`│   • ${k.padEnd(12)} → ${v?.slice(0,60)}...`);
-    }
-    console.log('└─────────────────────────────────────────────────────────');
-    console.log('🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲\n');
-  }
 
   private async _savePlan(plan: ChimeraPlan): Promise<void> {
     await fsp.mkdir(this.planDir, { recursive: true });
@@ -185,10 +173,6 @@ export class ChimeraOrchestrator extends GeminiChat {
       const raw = await fsp.readFile(this.planPath, 'utf-8');
       return JSON.parse(raw) as ChimeraPlan;
     } catch { return null; }
-  }
-
-  private log(tag: string, msg: string) {
-    console.log(`[${tag}] ${msg}`);
   }
 
   /**
@@ -248,7 +232,7 @@ export class ChimeraOrchestrator extends GeminiChat {
     };
 
     if (this.currentPlan) await this._savePlan(this.currentPlan);
-    this.log('IMPLEMENTER', `Step ${step.step_id} → ${execResult.status}`);
+    // Note: step-level logging is now handled in the main sendMessage loop
 
     return execResult;
   }
@@ -260,47 +244,57 @@ export class ChimeraOrchestrator extends GeminiChat {
     params: SendMessageParameters,
     prompt_id: string,
   ): Promise<GenerateContentResponse> {
-    this.logBanner();          // <‑‑‑ show agents banner once
-    
-    /* ---------- 1. Master clarification ---------- */
+    chimeraLog('MASTER', `🎯 complex task detected – activating workflow`);
+    chimeraLog('MASTER', '🟢 clarifying user intent…');
+
     const masterResp = await this.masterAgentChat.sendMessage(
-      {
-        ...params,
-        message:
-          'Clarify user intent and rewrite explicitly:\n' + params.message,
-      },
+      { message: params.message },
       prompt_id,
     );
-    const clarified = this._extractText(masterResp);
+
+    const clarified = this._extractText(masterResp).trim();
+    chimeraLog('MASTER', `✅ clarified: "${clarified.slice(0, 60)}"`);
 
     /* ---------- 2. Architect plan with JSON‑schema validation & bounded retries ---------- */
     const MAX_TRIES = 3;
     let planObj: ChimeraPlan | null = null;
     let architectText = '';
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      const architectPrompt =
-        [
-          'You are the Architect agent.',
-          'Return ONLY JSON matching the ChimeraPlan schema. Do not include prose.',
-          `original_user_request: ${params.message}`,
-          `clarified_requirements: ${clarified}`,
-        ].join('\n');
+      chimeraLog('ARCHITECT', `🟢 drafting plan (attempt ${attempt}/${MAX_TRIES})`);
+      
+      const architectPrompt = JSON.stringify({
+        original_user_request: params.message,
+        clarified_requirements: clarified,
+      });
 
       const archResp = await this.architectAgentChat.sendMessage(
-        { ...params, message: architectPrompt },
+        { message: architectPrompt },
         `${prompt_id}-arch-${attempt}`,
       );
       architectText = this._extractText(archResp);
 
+      // Clean up the response - remove markdown formatting if present
+      let cleanedText = architectText.trim();
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
       // Parse
       let parsed: unknown;
       try {
-        parsed = JSON.parse(architectText);
-      } catch {
-        // Send schema error back to Architect
+        parsed = JSON.parse(cleanedText);
+      } catch (parseError) {
+        const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+        chimeraLog('ARCHITECT', `❌ invalid JSON (${errorMsg}), retrying…`);
+        
+        // Send more specific error back to Architect
         await this.architectAgentChat.addHistory({
           role: 'system',
-          parts: [{ text: '❌ Output was not valid JSON. Please output ONLY JSON.' }],
+          parts: [{ 
+            text: `❌ JSON Parse Error: ${errorMsg}. Please return ONLY valid JSON, no markdown or explanatory text.` 
+          }],
         });
         continue;
       }
@@ -314,24 +308,29 @@ export class ChimeraOrchestrator extends GeminiChat {
         planObj = parsed as ChimeraPlan;
         this.currentPlan = planObj;
         await this._savePlan(planObj);
-        this.log('ARCHITECT', '✅ valid ChimeraPlan saved to disk');
+        chimeraLog('ARCHITECT', `✅ plan OK – ${planObj.plan.length} step(s)`);
         break;
+      } else {
+        chimeraLog('ARCHITECT', `❌ invalid JSON (${errors?.length} error[s]), retrying…`);
+        
+        // Feed validation errors back to Architect (bounded retries)
+        await this.architectAgentChat.addHistory({
+          role: 'system',
+          parts: [
+            {
+              text: [
+                '❌ Schema validation failed. Your JSON structure is incorrect.',
+                `Validation errors: ${errors?.join(', ')}`,
+                'Please fix these errors and return ONLY corrected JSON:'
+              ].join('\n')
+            },
+          ],
+        });
       }
-
-      // Feed validation errors back to Architect (bounded retries)
-      await this.architectAgentChat.addHistory({
-        role: 'system',
-        parts: [
-          {
-            text:
-              '❌ Schema validation failed. Fix the following errors and output ONLY the corrected JSON:\n' +
-              errors?.join('\n'),
-          },
-        ],
-      });
     }
 
     if (!planObj) {
+      chimeraLog('ARCHITECT', '❌ failed to create valid plan after all attempts');
       return {
         candidates: [
           {
@@ -352,8 +351,10 @@ export class ChimeraOrchestrator extends GeminiChat {
     }
 
     // 3. Implementer executes each step (NEW runner)
+    chimeraLog('IMPLEMENTER', `🟢 starting execution of ${planObj.plan.length} steps...`);
     for (const step of planObj.plan) {
       if (step.status === 'done') continue; // skip already‑done
+      chimeraLog('IMPLEMENTER', `🟢 ${step.step_id}: ${step.description.slice(0, 50)}...`);
       const execResult = await this._runImplementerStep(
         step,
         params,
@@ -363,7 +364,10 @@ export class ChimeraOrchestrator extends GeminiChat {
       step.artifacts.push(...execResult.artifacts);
       if (execResult.status === 'failed') {
         step.error_message = execResult.error;
+        chimeraLog('IMPLEMENTER', `❌ ${step.step_id} failed`);
         break; // stop execution; Critic will handle
+      } else {
+        chimeraLog('IMPLEMENTER', `✅ ${step.step_id} done (artifacts: ${execResult.artifacts.length})`);
       }
     }
 
@@ -372,6 +376,7 @@ export class ChimeraOrchestrator extends GeminiChat {
       .join(', ');
 
     /* ---------- 4. Critic review ---------- */
+    chimeraLog('CRITIC', '🟢 reviewing implementation quality...');
     this.criticAgentChat.clearHistory(); // unbiased review
     const criticResp = await this.criticAgentChat.sendMessage(
       {
@@ -384,15 +389,18 @@ export class ChimeraOrchestrator extends GeminiChat {
     );
     const review = this._safeJson<CriticReview>(criticResp, 'CriticReview');
     if (review && review.pass === false) {
+      chimeraLog('CRITIC', '❌ quality review failed - plan needs revision');
       // when criticReview.pass === false and you mutate plan
       if (this.currentPlan) {
         await this._savePlan(this.currentPlan);
-        this.log('CRITIC', '✏️  plan patched & re‑saved');
+        chimeraLog('CRITIC', '✏️ plan patched & re‑saved');
       }
       return criticResp; // bubble up issues/recommendation
     }
+    chimeraLog('CRITIC', '✅ quality review passed');
 
     /* ---------- 5. Success ---------- */
+    chimeraLog('MASTER', '🎯 multi-agent workflow completed successfully');
     return {
       candidates: [
         {
@@ -405,13 +413,48 @@ export class ChimeraOrchestrator extends GeminiChat {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Stream version – hand off to Master for now                        */
+  /* Stream version – routes complex tasks to full workflow             */
   /* ------------------------------------------------------------------ */
   async sendMessageStream(
     params: SendMessageParameters,
     prompt_id: string,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    this.logBanner();          // <‑‑‑ show agents banner once for stream too
+    // Detect if this looks like a complex task that would benefit from multi-agent workflow
+    let message = '';
+    if (typeof params.message === 'string') {
+      message = params.message;
+    } else if (params.message && typeof params.message === 'object') {
+      // Handle case where message might be an object with text property
+      if ('text' in params.message && typeof params.message.text === 'string') {
+        message = params.message.text;
+      }
+      // Also check for other possible structures
+      if (Array.isArray(params.message)) {
+        // If it's an array, extract text from all text parts
+        message = params.message
+          .filter((part: any) => part && typeof part === 'object' && 'text' in part)
+          .map((part: any) => part.text)
+          .join(' ');
+      }
+    }
+    
+    const isComplexTask = /create|write|build|implement|develop|generate|make|file/i.test(message);
+    
+    if (isComplexTask) {
+      chimeraLog('MASTER', '🎯 complex task detected - activating multi-agent workflow');
+      
+      // Route to full multi-agent workflow and convert result to stream
+      const response = await this.sendMessage(params, prompt_id);
+      
+      // Convert the single response to a stream format
+      async function* singleResponseToStream() {
+        yield response;
+      }
+      
+      return singleResponseToStream();
+    }
+    
+    // For simple tasks, delegate to Master agent directly
     return this.masterAgentChat.sendMessageStream(params, prompt_id);
   }
 
