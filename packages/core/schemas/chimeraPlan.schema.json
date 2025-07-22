@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ChimeraPlan",
+  "type": "object",
+  "required": [
+    "task_id",
+    "original_user_request",
+    "requirements",
+    "assumptions",
+    "constraints",
+    "plan",
+    "status",
+    "created_at",
+    "updated_at",
+    "model_versions",
+    "history"
+  ],
+  "properties": {
+    "task_id": { "type": "string" },
+    "original_user_request": { "type": "string" },
+    "requirements": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "constraints": { "type": "array", "items": { "type": "string" } },
+    "plan": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PlanStep" },
+      "minItems": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "done", "failed"]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "model_versions": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "history": { "type": "array" }
+  },
+  "definitions": {
+    "PlanStep": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "description",
+        "depends_on",
+        "status",
+        "artifacts",
+        "attempts",
+        "max_attempts"
+      ],
+      "properties": {
+        "step_id": { "type": "string" },
+        "description": { "type": "string" },
+        "rationale": { "type": "string" },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "inputs": { "type": "object" },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "done", "failed"]
+        },
+        "artifacts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "max_attempts": { "type": "integer", "minimum": 1 },
+        "error_message": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -29,6 +29,7 @@ import { getResponseText } from '../utils/generateContentResponseUtilities.js';
 import { checkNextSpeaker } from '../utils/nextSpeakerChecker.js';
 import { reportError } from '../utils/errorReporting.js';
 import { GeminiChat } from './geminiChat.js';
+import { ChimeraOrchestrator } from './chimeraOrchestrator.js';
 import { retryWithBackoff } from '../utils/retry.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { isFunctionResponse } from '../utils/messageInspectors.js';
@@ -227,6 +228,29 @@ export class GeminiClient {
   }
 
   async startChat(extraHistory?: Content[]): Promise<GeminiChat> {
+    // ---------------------------------------------------------------------
+    // ⚡ Automatic Flash fallback on daily‑quota 429
+    // ---------------------------------------------------------------------
+    this.config.flashFallbackHandler = async (
+      fromModel: string,
+      toModel: string,
+      err?: unknown,
+    ) => {
+      // Prevent loops – if we're already on Flash do nothing.
+      if (fromModel === toModel) return false;
+
+      console.warn(
+        `⚠️  Quota exhausted for ${fromModel}. Switching to ${toModel} for the rest of this session.`,
+      );
+
+      // Persist the switch in memory; future calls use Flash automatically.
+      this.config.setModel(toModel);
+
+      // Return TRUE so GeminiChat immediately retries the failed call.
+      return true;
+    };
+    // ---------------------------------------------------------------------
+
     const envParts = await this.getEnvironment();
     const toolRegistry = await this.config.getToolRegistry();
     const toolDeclarations = toolRegistry.getFunctionDeclarations();
@@ -255,7 +279,7 @@ export class GeminiClient {
             },
           }
         : this.generateContentConfig;
-      return new GeminiChat(
+      return new ChimeraOrchestrator(
         this.config,
         this.getContentGenerator(),
         {
@@ -263,7 +287,6 @@ export class GeminiClient {
           ...generateContentConfigWithThinking,
           tools,
         },
-        history,
       );
     } catch (error) {
       await reportError(
