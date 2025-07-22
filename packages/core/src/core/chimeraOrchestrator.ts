@@ -13,6 +13,8 @@ import {
   PartListUnion,
   FunctionCall,
 } from '@google/genai';
+import path from 'node:path';
+import { promises as fsp } from 'node:fs';
 
 import { GeminiChat } from './geminiChat.js';
 import { Config } from '../config/config.js';
@@ -88,6 +90,17 @@ export class ChimeraOrchestrator extends GeminiChat {
   private toolRegistry?: ToolRegistry;
   private readonly configRef: Config;
 
+  /** last persisted plan (nullable until first save) */
+  private currentPlan?: ChimeraPlan;
+
+  /** .chimera directory under the CWD */
+  private get planDir(): string {
+    return path.join(process.cwd(), '.chimera');
+  }
+  private get planPath(): string {
+    return path.join(this.planDir, 'plan.json');
+  }
+
   constructor(
     config: Config,
     contentGenerator: ContentGenerator,
@@ -128,6 +141,54 @@ export class ChimeraOrchestrator extends GeminiChat {
     this.criticAgentChat = mk(
       'You are the Critic Agent. Return ONLY CriticReview JSON.',
     );
+
+    // ⇢ attempt warm‑start
+    this._loadPlan().then(plan => {
+      if (plan) {
+        console.log('[ORCH] Resuming from .chimera/plan.json');
+        this.currentPlan = plan;
+      }
+    }).catch(() => { /* silent */ });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* One‑shot banner so you can SEE which internal agents are alive     */
+  /* ------------------------------------------------------------------ */
+  private bannerShown = false;
+  private logBanner() {
+    if (this.bannerShown) return;
+    this.bannerShown = true;
+
+    const names = {
+      master:        'You are the Master Agent. Clarify user intent and rewrite explicitly.',
+      architect:     'You are the Architect Agent. Output ONLY ChimeraPlan JSON.',
+      implementer:   'You are the Implementer Agent. Execute a single PlanStep.',
+      critic:        'You are the Critic Agent. Return ONLY CriticReview JSON.',
+    };
+    console.log('\n🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲');
+    console.log('┌─────────────────────────────────────────────────────────');
+    console.log('│ 🐲  Project Chimera – internal agents online');
+    for (const [k,v] of Object.entries(names)) {
+      console.log(`│   • ${k.padEnd(12)} → ${v?.slice(0,60)}...`);
+    }
+    console.log('└─────────────────────────────────────────────────────────');
+    console.log('🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲🐲\n');
+  }
+
+  private async _savePlan(plan: ChimeraPlan): Promise<void> {
+    await fsp.mkdir(this.planDir, { recursive: true });
+    await fsp.writeFile(this.planPath, JSON.stringify(plan, null, 2), 'utf-8');
+  }
+
+  private async _loadPlan(): Promise<ChimeraPlan | null> {
+    try {
+      const raw = await fsp.readFile(this.planPath, 'utf-8');
+      return JSON.parse(raw) as ChimeraPlan;
+    } catch { return null; }
+  }
+
+  private log(tag: string, msg: string) {
+    console.log(`[${tag}] ${msg}`);
   }
 
   /**
@@ -180,11 +241,16 @@ export class ChimeraOrchestrator extends GeminiChat {
 
     // 2️⃣  Determine success
     const hasFailure = toolResults.some(r => !r.success);
-    return {
-      status: hasFailure ? 'failed' : 'done',
+    const execResult = {
+      status: (hasFailure ? 'failed' : 'done') as 'done'|'failed',
       artifacts,
       error: hasFailure ? JSON.stringify(toolResults) : undefined,
     };
+
+    if (this.currentPlan) await this._savePlan(this.currentPlan);
+    this.log('IMPLEMENTER', `Step ${step.step_id} → ${execResult.status}`);
+
+    return execResult;
   }
 
   /* ------------------------------------------------------------------ */
@@ -194,6 +260,8 @@ export class ChimeraOrchestrator extends GeminiChat {
     params: SendMessageParameters,
     prompt_id: string,
   ): Promise<GenerateContentResponse> {
+    this.logBanner();          // <‑‑‑ show agents banner once
+    
     /* ---------- 1. Master clarification ---------- */
     const masterResp = await this.masterAgentChat.sendMessage(
       {
@@ -244,6 +312,9 @@ export class ChimeraOrchestrator extends GeminiChat {
       );
       if (ok) {
         planObj = parsed as ChimeraPlan;
+        this.currentPlan = planObj;
+        await this._savePlan(planObj);
+        this.log('ARCHITECT', '✅ valid ChimeraPlan saved to disk');
         break;
       }
 
@@ -313,6 +384,11 @@ export class ChimeraOrchestrator extends GeminiChat {
     );
     const review = this._safeJson<CriticReview>(criticResp, 'CriticReview');
     if (review && review.pass === false) {
+      // when criticReview.pass === false and you mutate plan
+      if (this.currentPlan) {
+        await this._savePlan(this.currentPlan);
+        this.log('CRITIC', '✏️  plan patched & re‑saved');
+      }
       return criticResp; // bubble up issues/recommendation
     }
 
@@ -335,7 +411,12 @@ export class ChimeraOrchestrator extends GeminiChat {
     params: SendMessageParameters,
     prompt_id: string,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
+    this.logBanner();          // <‑‑‑ show agents banner once for stream too
     return this.masterAgentChat.sendMessageStream(params, prompt_id);
+  }
+
+  public getHistory(curated = false) {
+    return this.masterAgentChat.getHistory(curated);
   }
 
   /* ------------------------------------------------------------------ */
