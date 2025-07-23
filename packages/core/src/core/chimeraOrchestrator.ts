@@ -10,7 +10,6 @@ import {
   GenerateContentConfig,
   GenerateContentResponse,
   SendMessageParameters,
-  PartListUnion,
   FunctionCall,
 } from '@google/genai';
 import path from 'node:path';
@@ -20,17 +19,63 @@ import { GeminiChat } from './geminiChat.js';
 import { Config } from '../config/config.js';
 import { ContentGenerator } from './contentGenerator.js';
 
-import { ChimeraPlan, CriticReview, PlanStep, PlanStatus } from '../interfaces/chimera.js';
-import { ServerGeminiStreamEvent, Turn } from './turn.js';
+import {
+  ChimeraPlan,
+  CriticReview,
+  PlanStep,
+  PlanStatus,
+} from '../interfaces/chimera.js';
 import { ToolResult } from '../tools/tools.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { validateJson } from '../utils/jsonValidator.js';
 import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
 import { chimeraLog } from '../utils/chimeraLogger.js';
 
-// -----------------------------------------------------------------------------
-// 🛠️  Tool‑call execution helper
-// -----------------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Pulls out the *first* {...} or [...] block from a text string. */
+function extractJsonBlock(text: string): string | null {
+  const match = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  return match ? match[0] : null;
+}
+
+async function executeToolCalls(
+  registry: ToolRegistry,
+  calls: FunctionCall[] | undefined,
+): Promise<ToolCallResult[]> {
+  if (!calls?.length) return [];
+  const out: ToolCallResult[] = [];
+
+  for (const call of calls) {
+    if (!call.name) {
+      out.push({ name: 'unknown', success: false, error: 'missing name' });
+      continue;
+    }
+    const tool = registry.getTool(call.name);
+    if (!tool) {
+      out.push({
+        name: call.name,
+        success: false,
+        error: `Unknown tool "${call.name}"`,
+      });
+      continue;
+    }
+    try {
+      const args =
+        typeof call.args === 'string'
+          ? JSON.parse(call.args || '{}')
+          : call.args ?? {};
+      const result = await tool.execute(args, AbortSignal.timeout(300_000));
+      out.push({ name: call.name, success: true, result });
+    } catch (err) {
+      out.push({ name: call.name, success: false, error: String(err) });
+    }
+  }
+  return out;
+}
+
 interface ToolCallResult {
   name: string;
   success: boolean;
@@ -38,436 +83,383 @@ interface ToolCallResult {
   error?: string;
 }
 
-async function executeToolCalls(
-  toolRegistry: ToolRegistry,
-  calls: FunctionCall[] | undefined,
-): Promise<ToolCallResult[]> {
-  if (!calls || calls.length === 0) return [];
-  const results: ToolCallResult[] = [];
-  for (const call of calls) {
-    if (!call.name) {
-      results.push({
-        name: 'unknown',
-        success: false,
-        error: `Tool call has no name`,
-      });
-      continue;
-    }
-    
-    const tool = toolRegistry.getTool(call.name);
-    if (!tool) {
-      results.push({
-        name: call.name,
-        success: false,
-        error: `Unknown tool \`${call.name}\``,
-      });
-      continue;
-    }
-    try {
-      const argsString = typeof call.args === 'string' ? call.args : JSON.stringify(call.args || {});
-      const parsedArgs = JSON.parse(argsString);
-      const result = await tool.execute(parsedArgs, AbortSignal.timeout(300_000));
-      results.push({ name: call.name, success: true, result });
-    } catch (err: any) {
-      results.push({ name: call.name, success: false, error: String(err) });
-    }
-  }
-  return results;
-}
+/* ------------------------------------------------------------------ */
+/* Example JSON shown to Architect to anchor output shape              */
+/* ------------------------------------------------------------------ */
+const EXAMPLE_CHIMERA_PLAN_JSON = `{
+  "task_id": "demo-0001",
+  "original_user_request": "Create hello.ts",
+  "requirements": ["hello.ts prints Hello World"],
+  "assumptions": [],
+  "constraints": [],
+  "plan": [{
+    "step_id": "S1",
+    "description": "write hello.ts file",
+    "depends_on": [],
+    "status": "pending",
+    "artifacts": [],
+    "attempts": 0,
+    "max_attempts": 2
+  }],
+  "status": "pending",
+  "created_at": "2025-07-23T00:00:00Z",
+  "updated_at": "2025-07-23T00:00:00Z",
+  "model_versions": {"architect": "gemini-2.5-flash"},
+  "history": []
+}`;
 
-/**
- * ChimeraOrchestrator – a GeminiChat *sub‑class* that internally coordinates
- * Master → Architect → Implementer → Critic agents.
- *
- * Because it extends GeminiChat, the rest of the CLI/test‑suite can keep
- * treating it as a normal chat session (history helpers, sendMessageStream,
- * etc.) without type errors.
- */
+/* ======================================================================
+   CHIMERA  ORCHESTRATOR
+   ====================================================================== */
 export class ChimeraOrchestrator extends GeminiChat {
-  private readonly masterAgentChat: GeminiChat;
-  private readonly architectAgentChat: GeminiChat;
-  private readonly implementerAgentChat: GeminiChat;
-  private readonly criticAgentChat: GeminiChat;
-  private toolRegistry?: ToolRegistry;
-  private readonly configRef: Config;
+  /* ───────── internal agent handles ───────── */
+  private readonly masterChat: GeminiChat;
+  private readonly architectChat: GeminiChat;
+  private readonly implementerChat: GeminiChat;
+  private readonly criticChat: GeminiChat;
 
-  /** last persisted plan (nullable until first save) */
   private currentPlan?: ChimeraPlan;
+  private readonly cfg: Config;
+  
+  private readonly _masterSystemPrompt = {
+    role: 'system' as const,
+    parts: [{
+      text: 'Rewrite the USER request as ONE sentence (<50 chars). ' +
+            'Return ONLY that sentence; no commentary.',
+    }],
+  };
 
-  /** .chimera directory under the CWD */
-  private get planDir(): string {
+  private get planDir() {
     return path.join(process.cwd(), '.chimera');
   }
-  private get planPath(): string {
+  private get planPath() {
     return path.join(this.planDir, 'plan.json');
   }
 
   constructor(
-    config: Config,
-    contentGenerator: ContentGenerator,
-    generationConfig: GenerateContentConfig = {},
+    cfg: Config,
+    gen: ContentGenerator,
+    gcfg: GenerateContentConfig = {},
   ) {
-    // super() session represents the *public* Master history
-    super(config, contentGenerator, generationConfig, []);
-    
-    this.configRef = config;
-    
-    /* ---------- dedicated internal agents ---------- */
-    const mk = (roleText: string) =>
+    super(cfg, gen, gcfg, []);
+    this.cfg = cfg;
+
+    /* ---------- spawn sub-chats ---------- */
+    const mkChat = (systemPrompt: string) =>
       new GeminiChat(
-        config,
-        contentGenerator,
-        {
-          ...generationConfig,
-          systemInstruction: { role: 'system', parts: [{ text: roleText }] },
-        },
+        cfg,
+        gen,
+        { ...gcfg, systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] } },
         [],
       );
 
-    this.masterAgentChat = new GeminiChat(
-      config,
-      contentGenerator,
+    this.masterChat = new GeminiChat(
+      cfg,
+      gen,
       {
-        ...generationConfig,
-        systemInstruction: {
-          role: 'system',
-          parts: [
-            {
-              text:
-                'You are the Master agent. Your ONLY task is to restate the user\'s ' +
-                'request as one concise, explicit sentence – no commentary, no "thoughts".'
-            },
-          ],
-        },
+        ...gcfg,
+        systemInstruction: this._masterSystemPrompt,
       },
       [],
-    ); // Create separate Master agent instead of circular reference
-    this.architectAgentChat = mk(
-      'You are the Architect agent. Produce ONLY valid ChimeraPlan JSON – nothing else.',
     );
-    this.implementerAgentChat = mk(
-      'You are the Implementer Agent. Execute a single PlanStep.',
+    this.architectChat = mkChat(
+      'You are the Architect. Output ONLY valid ChimeraPlan JSON – no prose.',
     );
-    this.criticAgentChat = mk(
-      'You are the Critic Agent. Return ONLY CriticReview JSON.',
+    this.implementerChat = mkChat(
+      'You are the Implementer. Execute exactly one PlanStep. Call tools as needed.',
+    );
+    this.criticChat = mkChat(
+      'You are the Critic. Return ONLY CriticReview JSON.',
     );
 
-    // ⇢ attempt warm‑start
-    this._loadPlan().then(plan => {
-      if (plan) {
-        console.log('[ORCH] Resuming from .chimera/plan.json');
-        this.currentPlan = plan;
-      }
-    }).catch(() => { /* silent */ });
+    /* warm-start */
+    this._loadPlan().catch(() => {});
   }
 
-
-
-  private async _savePlan(plan: ChimeraPlan): Promise<void> {
+  /* ===== persistence ===== */
+  private async _savePlan(plan: ChimeraPlan) {
     await fsp.mkdir(this.planDir, { recursive: true });
     await fsp.writeFile(this.planPath, JSON.stringify(plan, null, 2), 'utf-8');
+    if (process.env.CHIMERA_DEBUG)
+      chimeraLog('ARCHITECT', `📄 plan saved → ${this.planPath}`);
   }
-
-  private async _loadPlan(): Promise<ChimeraPlan | null> {
+  private async _loadPlan(): Promise<void> {
     try {
       const raw = await fsp.readFile(this.planPath, 'utf-8');
-      return JSON.parse(raw) as ChimeraPlan;
-    } catch { return null; }
-  }
-
-  /**
-   * Runs a single PlanStep via the Implementer agent and executes any tool calls it issues.
-   */
-  private async _runImplementerStep(
-    step: PlanStep,
-    params: SendMessageParameters,
-    prompt_id: string,
-  ): Promise<{status: 'done'|'failed'; artifacts: string[]; error?: string}> {
-    const toolRegistry = await this.configRef.getToolRegistry();
-
-    const implResp = await this.implementerAgentChat.sendMessage(
-      {
-        ...params,
-        message: {
-          text:
-            `You are executing plan step \`${step.step_id}\`: ${step.description}\n` +
-            `If a tool is required, CALL the tool. Do NOT explain the call.\n` +
-            `Return plain text once done.`
-        },
-      },
-      `${prompt_id}-${step.step_id}`,
-    );
-
-    // 1️⃣  Capture any tool calls the LLM emitted and execute them.
-    const toolCalls = getFunctionCalls(implResp);
-    const toolResults = await executeToolCalls(toolRegistry, toolCalls);
-    const artifacts: string[] = [];
-
-    for (const r of toolResults) {
-      if (r.success && r.result?.llmContent) {
-        // Handle llmContent which could be a string or PartListUnion
-        const content = r.result.llmContent;
-        if (typeof content === 'string') {
-          artifacts.push(content);
-        } else if (Array.isArray(content)) {
-          for (const part of content) {
-            if (typeof part === 'string') {
-              artifacts.push(part);
-            } else if (part && typeof part === 'object' && 'text' in part && part.text) {
-              artifacts.push(part.text);
-            }
-          }
-        } else if (content && typeof content === 'object' && 'text' in content && content.text) {
-          artifacts.push(content.text);
-        }
-      }
+      this.currentPlan = JSON.parse(raw) as ChimeraPlan;
+      chimeraLog('MASTER', '♻️  resumed existing plan');
+    } catch {
+      /* ignore */
     }
-
-    // 2️⃣  Determine success
-    const hasFailure = toolResults.some(r => !r.success);
-    const execResult = {
-      status: (hasFailure ? 'failed' : 'done') as 'done'|'failed',
-      artifacts,
-      error: hasFailure ? JSON.stringify(toolResults) : undefined,
-    };
-
-    if (this.currentPlan) await this._savePlan(this.currentPlan);
-    // Note: step-level logging is now handled in the main sendMessage loop
-
-    return execResult;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Orchestrated single‑shot message                                   */
-  /* ------------------------------------------------------------------ */
+  /* ====================================================================
+     SINGLE-SHOT WORKFLOW
+     ==================================================================== */
   async sendMessage(
     params: SendMessageParameters,
-    prompt_id: string,
+    promptId: string,
   ): Promise<GenerateContentResponse> {
-    chimeraLog('MASTER', `🎯 complex task detected – activating workflow`);
-    chimeraLog('MASTER', '🟢 clarifying user intent…');
+    /* ─── hard‑reset master to its disciplined state ─── */
+    this.masterChat.clearHistory();                               // NEW
+    this.masterChat.addHistory(this._masterSystemPrompt);         // NEW
 
-    const masterResp = await this.masterAgentChat.sendMessage(
-      { message: params.message },
-      prompt_id,
+    /* ---------- 1. MASTER ---------- */
+    chimeraLog('MASTER', '🎯 complex task detected – activating workflow');
+    const userText =
+      typeof params.message === 'string'
+        ? params.message
+        : JSON.stringify(params.message);
+
+    const masterResp = await this.masterChat.sendMessage(
+      { message: userText },
+      `${promptId}-master`,
     );
-
     const clarified = this._extractText(masterResp).trim();
-    chimeraLog('MASTER', `✅ clarified: "${clarified.slice(0, 60)}"`);
+    chimeraLog('MASTER', `✅ clarified: "${clarified}"`);
 
-    /* ---------- 2. Architect plan with JSON‑schema validation & bounded retries ---------- */
-    const MAX_TRIES = 3;
-    let planObj: ChimeraPlan | null = null;
-    let architectText = '';
-    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      chimeraLog('ARCHITECT', `🟢 drafting plan (attempt ${attempt}/${MAX_TRIES})`);
-      
-      const architectPrompt = JSON.stringify({
-        original_user_request: params.message,
-        clarified_requirements: clarified,
-      });
-
-      const archResp = await this.architectAgentChat.sendMessage(
-        { message: architectPrompt },
-        `${prompt_id}-arch-${attempt}`,
+    /* ---------- 2. ARCHITECT ---------- */
+    const plan = await this._getValidPlan(userText, clarified, promptId);
+    if (!plan) {
+      return this._simpleTextResponse(
+        'Architect could not produce valid plan after retries.',
       );
-      architectText = this._extractText(archResp);
+    }
+    this.currentPlan = plan;
+    await this._savePlan(plan);
 
-      // Clean up the response - remove markdown formatting if present
-      let cleanedText = architectText.trim();
-      if (cleanedText.startsWith('```json')) {
-        cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (cleanedText.startsWith('```')) {
-        cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
+    /* ---------- 3. IMPLEMENTER ---------- */
+    const implSummary = await this._executePlan(plan, params, promptId);
 
-      // Parse
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(cleanedText);
-      } catch (parseError) {
-        const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown parse error';
-        chimeraLog('ARCHITECT', `❌ invalid JSON (${errorMsg}), retrying…`);
-        
-        // Send more specific error back to Architect
-        await this.architectAgentChat.addHistory({
-          role: 'system',
-          parts: [{ 
-            text: `❌ JSON Parse Error: ${errorMsg}. Please return ONLY valid JSON, no markdown or explanatory text.` 
-          }],
-        });
-        continue;
-      }
+    /* ---------- 4. CRITIC + RE-PLAN LOOP ---------- */
+    const criticResult = await this._criticLoop(plan, implSummary, params, promptId);
+    if (criticResult) return criticResult;
 
-      // Validate
+    /* ---------- SUCCESS ---------- */
+    chimeraLog('MASTER', '🎯 workflow complete – all good');
+    return this._simpleTextResponse(implSummary);
+  }
+
+  /* ............................................................ ARCHITECT */
+  private async _getValidPlan(
+    original: string,
+    clarified: string,
+    promptId: string,
+  ): Promise<ChimeraPlan | null> {
+    const MAX = 3;
+    for (let i = 1; i <= MAX; i++) {
+      chimeraLog('ARCHITECT', `🟢 drafting plan (attempt ${i}/${MAX})`);
+      const prompt = [
+        'You are the **Architect**.',
+        'Return ONLY a valid ChimeraPlan JSON object.',
+        '',
+        `Original request: ${original}`,
+        `Clarified requirements: ${clarified}`,
+        '',
+        'Example (copy shape, change content):',
+        EXAMPLE_CHIMERA_PLAN_JSON,
+      ].join('\n');
+
+      const resp = await this.architectChat.sendMessage(
+        { message: prompt },
+        `${promptId}-arch-${i}`,
+      );
+      const txt = this._extractText(resp).trim();
+
+      const plan = this._tryParseJson<ChimeraPlan>(txt, 'ChimeraPlan');
+      if (!plan) continue;
+
       const { ok, errors } = validateJson<ChimeraPlan>(
-        parsed,
+        plan,
         'chimeraPlan.schema.json',
       );
       if (ok) {
-        planObj = parsed as ChimeraPlan;
-        this.currentPlan = planObj;
-        await this._savePlan(planObj);
-        chimeraLog('ARCHITECT', `✅ plan OK – ${planObj.plan.length} step(s)`);
-        break;
-      } else {
-        chimeraLog('ARCHITECT', `❌ invalid JSON (${errors?.length} error[s]), retrying…`);
-        
-        // Feed validation errors back to Architect (bounded retries)
-        await this.architectAgentChat.addHistory({
-          role: 'system',
-          parts: [
-            {
-              text: [
-                '❌ Schema validation failed. Your JSON structure is incorrect.',
-                `Validation errors: ${errors?.join(', ')}`,
-                'Please fix these errors and return ONLY corrected JSON:'
-              ].join('\n')
-            },
-          ],
-        });
+        chimeraLog('ARCHITECT', `✅ plan OK – ${plan.plan.length} steps`);
+        return plan;
       }
-    }
 
-    if (!planObj) {
-      chimeraLog('ARCHITECT', '❌ failed to create valid plan after all attempts');
-      return {
-        candidates: [
+      chimeraLog(
+        'ARCHITECT',
+        `❌ schema errors (${errors?.length}). retrying…`,
+      );
+      await this.architectChat.addHistory({
+        role: 'system',
+        parts: [
           {
-            content: {
-              parts: [
-                {
-                  text:
-                    'Architect never produced a valid ChimeraPlan after ' +
-                    MAX_TRIES +
-                    ' attempts. Last output:\n' +
-                    architectText,
-                },
-              ],
-            },
+            text:
+              '❌ Your JSON failed validation:\n' +
+              (errors ?? []).join('\n') +
+              '\nReturn ONLY corrected JSON.',
           },
         ],
-      } as unknown as GenerateContentResponse;
+      });
     }
-
-    // 3. Implementer executes each step (NEW runner)
-    chimeraLog('IMPLEMENTER', `🟢 starting execution of ${planObj.plan.length} steps...`);
-    for (const step of planObj.plan) {
-      if (step.status === 'done') continue; // skip already‑done
-      chimeraLog('IMPLEMENTER', `🟢 ${step.step_id}: ${step.description.slice(0, 50)}...`);
-      const execResult = await this._runImplementerStep(
-        step,
-        params,
-        prompt_id,
-      );
-      step.status = execResult.status as PlanStatus;
-      step.artifacts.push(...execResult.artifacts);
-      if (execResult.status === 'failed') {
-        step.error_message = execResult.error;
-        chimeraLog('IMPLEMENTER', `❌ ${step.step_id} failed`);
-        break; // stop execution; Critic will handle
-      } else {
-        chimeraLog('IMPLEMENTER', `✅ ${step.step_id} done (artifacts: ${execResult.artifacts.length})`);
-      }
-    }
-
-    const implementerSummary = planObj.plan
-      .map((s) => `${s.step_id}:${s.status}${s.error_message ? ` (${s.error_message})` : ''}`)
-      .join(', ');
-
-    /* ---------- 4. Critic review ---------- */
-    chimeraLog('CRITIC', '🟢 reviewing implementation quality...');
-    this.criticAgentChat.clearHistory(); // unbiased review
-    const criticResp = await this.criticAgentChat.sendMessage(
-      {
-        message:
-          'You are the Critic agent. Return ONLY CriticReview JSON evaluating implementer output.\n' +
-          'Plan JSON:\n' + JSON.stringify(planObj) + '\n' +
-          'Implementer Summary:\n' + implementerSummary,
-      },
-      `${prompt_id}-critic`,
-    );
-    const review = this._safeJson<CriticReview>(criticResp, 'CriticReview');
-    if (review && review.pass === false) {
-      chimeraLog('CRITIC', '❌ quality review failed - plan needs revision');
-      // when criticReview.pass === false and you mutate plan
-      if (this.currentPlan) {
-        await this._savePlan(this.currentPlan);
-        chimeraLog('CRITIC', '✏️ plan patched & re‑saved');
-      }
-      return criticResp; // bubble up issues/recommendation
-    }
-    chimeraLog('CRITIC', '✅ quality review passed');
-
-    /* ---------- 5. Success ---------- */
-    chimeraLog('MASTER', '🎯 multi-agent workflow completed successfully');
-    return {
-      candidates: [
-        {
-          content: {
-            parts: [{ text: implementerSummary }],
-          },
-        },
-      ],
-    } as GenerateContentResponse;
+    chimeraLog('ARCHITECT', '❌ gave up after max retries');
+    return null;
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Stream version – routes complex tasks to full workflow             */
-  /* ------------------------------------------------------------------ */
+  /* ........................................................ IMPLEMENTER */
+  private async _executePlan(
+    plan: ChimeraPlan,
+    params: SendMessageParameters,
+    promptId: string,
+  ): Promise<string> {
+    const registry = await this.cfg.getToolRegistry();
+    chimeraLog('IMPLEMENTER', `🟢 executing ${plan.plan.length} step(s)…`);
+
+    for (const step of plan.plan) {
+      if (step.status === 'done') continue;
+      chimeraLog('IMPLEMENTER', `→ ${step.step_id}: ${step.description}`);
+      const implResp = await this.implementerChat.sendMessage(
+        {
+          ...params,
+          message: [
+            `Step ID: ${step.step_id}`,
+            `Description: ${step.description}`,
+            '',
+            'If a tool is required, CALL it. Return plain text when finished.',
+          ].join('\n'),
+        },
+        `${promptId}-${step.step_id}`,
+      );
+
+      const toolResults = await executeToolCalls(
+        registry,
+        getFunctionCalls(implResp),
+      );
+
+      const failed = toolResults.find((r) => !r.success);
+      step.status = failed ? 'failed' : 'done';
+      step.artifacts.push(
+        ...toolResults
+          .filter((r) => r.success && r.result?.llmContent)
+          .map((r) => String(r.result!.llmContent).slice(0, 120)),
+      );
+      step.attempts += 1;
+      if (failed) step.error_message = failed.error;
+
+      await this._savePlan(plan);
+      chimeraLog(
+        'IMPLEMENTER',
+        `${step.step_id} → ${step.status}${failed ? `: ${failed.error}` : ''}`,
+      );
+      if (failed) break;
+    }
+    return plan.plan
+      .map((s) => `${s.step_id}:${s.status}`)
+      .join(', ');
+  }
+
+  /* ............................................................ CRITIC */
+  private readonly MAX_REPLANS = 3;
+  private async _criticLoop(
+    plan: ChimeraPlan,
+    summary: string,
+    params: SendMessageParameters,
+    promptId: string,
+  ): Promise<GenerateContentResponse | null> {
+    for (let round = 0; round < this.MAX_REPLANS; round++) {
+      const criticResp = await this.criticChat.sendMessage(
+        {
+          message: [
+            'Return ONLY CriticReview JSON. If pass=false you may suggest updated_plan_modifications.',
+            '',
+            'Plan:',
+            JSON.stringify(plan),
+            '',
+            'Implementer summary:',
+            summary,
+          ].join('\n'),
+        },
+        `${promptId}-critic-${round}`,
+      );
+      const review = this._tryParseJson<CriticReview>(
+        this._extractText(criticResp),
+        'CriticReview',
+      );
+      if (!review) {
+        chimeraLog('CRITIC', '⚠️  invalid JSON – giving up');
+        return criticResp;
+      }
+      if (review.pass) {
+        chimeraLog('CRITIC', '✅ review passed');
+        return null; // success
+      }
+      chimeraLog('CRITIC', `✏️  review failed – patching plan (round ${round + 1})`);
+
+      if (
+        !review.updated_plan_modifications?.length ||
+        !this._applyMods(plan, review.updated_plan_modifications)
+      ) {
+        chimeraLog('CRITIC', '❌ could not apply modifications – aborting');
+        return criticResp;
+      }
+      await this._savePlan(plan);
+
+      // re-execute modified / remaining steps
+      summary = await this._executePlan(plan, params, promptId);
+    }
+    chimeraLog('CRITIC', `⚠️  exceeded ${this.MAX_REPLANS} re-plan rounds`);
+    return this._simpleTextResponse('Critic failed after max retries.');
+  }
+
+  private _applyMods(plan: ChimeraPlan, mods: any[]): boolean {
+    try {
+      for (const m of mods) {
+        switch (m.action) {
+          case 'insert_after': {
+            const idx = plan.plan.findIndex((s) => s.step_id === m.after_step_id);
+            if (idx === -1 || !m.new_step) return false;
+            plan.plan.splice(idx + 1, 0, m.new_step);
+            break;
+          }
+          case 'replace': {
+            const idx = plan.plan.findIndex((s) => s.step_id === m.target_step_id);
+            if (idx === -1 || !m.new_step) return false;
+            plan.plan[idx] = m.new_step;
+            break;
+          }
+          case 'remove': {
+            const idx = plan.plan.findIndex((s) => s.step_id === m.target_step_id);
+            if (idx === -1) return false;
+            plan.plan.splice(idx, 1);
+            break;
+          }
+          default:
+            return false;
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /* ................................................ STREAM ROUTER */
   async sendMessageStream(
     params: SendMessageParameters,
-    prompt_id: string,
+    promptId: string,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    // Detect if this looks like a complex task that would benefit from multi-agent workflow
-    let message = '';
-    if (typeof params.message === 'string') {
-      message = params.message;
-    } else if (params.message && typeof params.message === 'object') {
-      // Handle case where message might be an object with text property
-      if ('text' in params.message && typeof params.message.text === 'string') {
-        message = params.message.text;
-      }
-      // Also check for other possible structures
-      if (Array.isArray(params.message)) {
-        // If it's an array, extract text from all text parts
-        message = params.message
-          .filter((part: any) => part && typeof part === 'object' && 'text' in part)
-          .map((part: any) => part.text)
-          .join(' ');
-      }
+    const txt =
+      typeof params.message === 'string'
+        ? params.message
+        : JSON.stringify(params.message);
+    const looksHard = /\b(create|write|generate|build|implement|refactor)\b/i.test(
+      txt,
+    );
+    if (!looksHard) return this.masterChat.sendMessageStream(params, promptId);
+
+    const resp = await this.sendMessage(params, promptId);
+    async function* once() {
+      yield resp;
     }
-    
-    const isComplexTask = /create|write|build|implement|develop|generate|make|file/i.test(message);
-    
-    if (isComplexTask) {
-      chimeraLog('MASTER', '🎯 complex task detected - activating multi-agent workflow');
-      
-      // Route to full multi-agent workflow and convert result to stream
-      const response = await this.sendMessage(params, prompt_id);
-      
-      // Convert the single response to a stream format
-      async function* singleResponseToStream() {
-        yield response;
-      }
-      
-      return singleResponseToStream();
-    }
-    
-    // For simple tasks, delegate to Master agent directly
-    return this.masterAgentChat.sendMessageStream(params, prompt_id);
+    return once();
   }
 
-  public getHistory(curated = false) {
-    return this.masterAgentChat.getHistory(curated);
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Helpers                                                            */
-  /* ------------------------------------------------------------------ */
-  private _extractText(resp?: GenerateContentResponse): string {
+  /* ..................................................... utils */
+  private _extractText(r?: GenerateContentResponse): string {
     return (
-      resp?.candidates
+      r?.candidates
         ?.flatMap((c: any) => c.content?.parts || [])
         .map((p: any) => (p as any).text || '')
         .join('\n')
@@ -475,15 +467,25 @@ export class ChimeraOrchestrator extends GeminiChat {
     );
   }
 
-  private _safeJson<T>(
-    resp: GenerateContentResponse,
-    label: string,
-  ): T | null {
+  private _tryParseJson<T>(txt: string, label: string): T | null {
     try {
-      return JSON.parse(this._extractText(resp)) as T;
+      return JSON.parse(txt) as T;
     } catch {
-      // Let caller decide how to surface invalid JSON
-      return null;
+      const blk = extractJsonBlock(txt);
+      if (!blk) return null;
+      try {
+        return JSON.parse(blk) as T;
+      } catch {
+        if (process.env.CHIMERA_DEBUG)
+          chimeraLog('ARCHITECT', `⚠️  could not parse json block`);
+        return null;
+      }
     }
+  }
+
+  private _simpleTextResponse(text: string): GenerateContentResponse {
+    return {
+      candidates: [{ content: { parts: [{ text }] } }],
+    } as GenerateContentResponse;
   }
 }

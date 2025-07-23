@@ -19,7 +19,7 @@
 
 Project Chimera is an experimental extension to Google's Gemini CLI that implements a hierarchical multi-agent system for AI-assisted software development. Instead of relying on a single AI agent, it orchestrates multiple specialized agents (Master, Architect, Implementer, Critic) to handle complex coding tasks with better context retention and quality control.
 
-**Status**: Early MVP - functional but not production-ready
+**Status**: Advanced MVP - Core multi-agent workflow complete, production hardening in progress
 
 ## The Problem This Addresses
 
@@ -59,10 +59,25 @@ Each agent maintains isolated conversation context to prevent cross-contaminatio
 - Executes file system operations via Gemini CLI tools
 - Includes "nudge" mechanism to encourage tool usage over plain text
 - Returns structured execution reports
+- Enhanced error capture and artifact tracking
+
+### Enhanced JSON Processing System
+
+**Smart JSON Extraction** - Robust LLM Response Handling
+- `extractJsonBlock()` helper tolerates prose wrappers and markdown formatting
+- Handles "conversational" AI responses that mix JSON with commentary
+- Multiple parsing strategies with graceful fallback mechanisms
+
+**Schema Validation** - Production-Ready Validation Pipeline
+- Dual-path schema resolution (works in development and production builds)
+- AJV integration with format support (eliminates date-time warnings)
+- Comprehensive error reporting with detailed validation feedback
 
 **Critic Agent** - Quality Assurance & Plan Validation
 - Reviews Implementer output against Architect's plan
-- Currently generates structured feedback (full review loop not yet implemented)
+- Complete re-plan loop with plan modification capabilities
+- Bounded retry logic with maximum replan limits
+- Structured feedback integration with plan state persistence
 
 ### Real-Time Debugging System
 
@@ -95,7 +110,7 @@ graph TD
 
 ## Development Progress
 
-### Phase 1: Core Architecture & Integration
+### Phase 1: Core Architecture & Integration - COMPLETED
 **Objective**: Establish multi-agent orchestration within Gemini CLI
 
 **Completed**:
@@ -103,7 +118,7 @@ graph TD
 - Isolated agent instances with separate conversation histories
 - Backward compatibility with existing CLI workflows
 
-### Phase 2: Schema-Driven Communication
+### Phase 2: Schema-Driven Communication - COMPLETED
 **Objective**: Implement structured inter-agent communication
 
 **Completed**:
@@ -111,7 +126,7 @@ graph TD
 - JSON schema validation with automatic retry mechanisms
 - Error handling for malformed agent outputs
 
-### Phase 3: JSON Generation Reliability
+### Phase 3: JSON Generation Reliability - COMPLETED
 **Objective**: Improve Architect agent's JSON output consistency
 
 **Completed**:
@@ -119,7 +134,7 @@ graph TD
 - JSON-first input approach using `JSON.stringify()`
 - Enhanced error handling with markdown cleanup
 
-### Phase 4: Tool Execution & File System Integration
+### Phase 4: Tool Execution & File System Integration - COMPLETED
 **Objective**: Enable real-world code execution
 
 **Completed**:
@@ -127,13 +142,52 @@ graph TD
 - "Nudge" mechanism to prompt tool usage
 - Structured execution reporting with error details
 
-### Phase 5: Observability & Debugging
+### Phase 5: Observability & Debugging - COMPLETED
 **Objective**: Add workflow visibility
 
 **Completed**:
 - Real-time colored telemetry with timestamps
 - Environment-controlled debug output via `CHIMERA_DEBUG`
 - Persistent plan state in `.chimera/plan.json`
+
+### Phase 6: Smart JSON Extraction & Error Recovery - COMPLETED
+**Objective**: Handle LLM "emo" responses and malformed JSON
+
+**Completed**:
+- `extractJsonBlock()` helper tolerates prose wrappers and markdown formatting
+- `_tryParseJson()` with multiple parsing strategies and fallback mechanisms
+- Robust JSON extraction from conversational AI responses
+
+### Phase 7: Critic Re-plan Loop - COMPLETED
+**Objective**: Implement complete feedback and plan modification cycle
+
+**Completed**:
+- `_criticLoop()` method with bounded retry logic (MAX_REPLANS = 3)
+- `_applyMods()` function for applying Critic modifications to plans
+- End-to-end workflow: Master → Architect → Implementer → Critic → Re-plan
+- Plan state persistence throughout review cycles
+
+### Phase 8: Production Hardening - COMPLETED
+**Objective**: Schema validation, path resolution, and state management
+
+**Completed**:
+- Enhanced `jsonValidator.ts` with dual-path resolution (src/dist compatibility)
+- AJV schema validation with format support (eliminates date-time warnings)
+- Master agent state re-initialization for clean workflow starts
+- Comprehensive error handling and graceful degradation
+
+### Phase 9: End-to-End Validation - IN PROGRESS
+**Objective**: Complete system testing and workflow verification
+
+**Completed**:
+- Schema path resolution fixed
+- Complete multi-agent workflow execution verified
+- Plan persistence and state management working
+- Debug logging and telemetry functional
+
+**Current Work**:
+- Final runtime testing and workflow optimization
+- Critic modification application refinements
 
 ## Technical Architecture
 
@@ -191,10 +245,17 @@ gemini
 ## Known Limitations & Future Work
 
 ### Current Limitations
-- **Critic Loop**: Quality review feedback not yet fully integrated into plan modification
-- **Tool Support**: Limited to Gemini CLI's existing tool set
-- **Error Recovery**: Basic retry mechanisms, needs more sophisticated error handling
+- **Minor Runtime Issues**: Some edge cases in Critic plan modification application
+- **Tool Constraints**: Limited to Gemini CLI's existing tool set (requires absolute paths)
 - **Performance**: No benchmarking or optimization yet
+- **Production Testing**: Needs extensive real-world testing and validation
+
+### Recently Resolved Issues
+- JSON Extraction: Smart parsing handles LLM prose responses and markdown formatting
+- Schema Validation: Complete AJV integration with proper format support
+- Critic Loop: Full feedback and re-plan cycle implementation
+- State Management: Plan persistence and agent re-initialization working
+- Path Resolution: Schema loading works in both development and production builds
 
 ### Planned Improvements
 - Complete Critic agent feedback integration

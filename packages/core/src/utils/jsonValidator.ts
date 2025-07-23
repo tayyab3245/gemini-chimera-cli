@@ -17,10 +17,10 @@ export function validateJson<T>(
   json: unknown,
   schemaRelPath: string,
 ): ValidationResult {
-  const ajv = new (Ajv as any)({ allErrors: true, strict: false });
+  const ajv = new (Ajv as any)({ allErrors: true, strict: false, formats: {} }); // ignore custom formats
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
-  const schemaAbs = join(__dirname, '../../../schemas', schemaRelPath);
+  const schemaAbs = join(__dirname, '../../schemas', schemaRelPath);
   const schemaRaw = readFileSync(schemaAbs, 'utf-8');
   const schema = JSON.parse(schemaRaw);
   const validate = ajv.compile(schema);
