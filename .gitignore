@@ -8,6 +8,9 @@
 
 # Note: .gemini-clipboard/ is NOT in gitignore so Gemini can access pasted images
 
+# Project Chimera context - local development only
+context/
+
 # Dependency directory
 node_modules
 bower_components
