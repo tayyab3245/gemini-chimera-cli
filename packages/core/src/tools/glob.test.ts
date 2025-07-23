@@ -149,10 +149,14 @@ describe('GlobTool', () => {
       // Ensure llmContent is a string for TypeScript type checking
       expect(typeof llmContent).toBe('string');
 
-      const filesListed = llmContent
-        .substring(llmContent.indexOf(':') + 1)
-        .trim()
-        .split('\n');
+      // More robust parsing: find the "newest first):" pattern and get everything after it
+      const headerPattern = 'newest first):';
+      const headerIndex = llmContent.indexOf(headerPattern);
+      expect(headerIndex).toBeGreaterThan(-1);
+      
+      const filesSection = llmContent.substring(headerIndex + headerPattern.length).trim();
+      const filesListed = filesSection.split('\n');
+      
       expect(filesListed[0]).toContain(path.join(tempRootDir, 'newer.sortme'));
       expect(filesListed[1]).toContain(path.join(tempRootDir, 'older.sortme'));
     });

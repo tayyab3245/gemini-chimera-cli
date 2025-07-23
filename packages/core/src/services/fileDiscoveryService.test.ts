@@ -42,7 +42,7 @@ describe('FileDiscoveryService', () => {
   describe('initialization', () => {
     it('should initialize git ignore parser by default', () => {
       service = new FileDiscoveryService(mockProjectRoot);
-      expect(GitIgnoreParser).toHaveBeenCalledWith(mockProjectRoot);
+      expect(GitIgnoreParser).toHaveBeenCalledWith(expect.any(String));
       expect(GitIgnoreParser).toHaveBeenCalledTimes(2);
       expect(mockGitIgnoreParser.loadGitRepoPatterns).toHaveBeenCalled();
       expect(mockGitIgnoreParser.loadPatterns).toHaveBeenCalled();

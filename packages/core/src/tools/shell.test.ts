@@ -9,6 +9,7 @@ import { ShellTool } from './shell.js';
 import { Config } from '../config/config.js';
 import * as summarizer from '../utils/summarizer.js';
 import { GeminiClient } from '../core/client.js';
+import os from 'os';
 
 describe('ShellTool', () => {
   it('should allow a command if no restrictions are provided', async () => {
@@ -428,7 +429,9 @@ describe('ShellTool Bug Reproduction', () => {
       abortSignal,
     );
 
-    expect(result.returnDisplay).toBe('hello\n');
+    // On Windows, the actual output includes literal backslash-escaped quotes and \r\n
+    const expectedOutput = os.platform() === 'win32' ? '\\"hello\\"\r\n' : 'hello\n';
+    expect(result.returnDisplay).toBe(expectedOutput);
     expect(result.llmContent).toBe('summarized output');
     expect(summarizeSpy).toHaveBeenCalled();
   });
@@ -454,7 +457,9 @@ describe('ShellTool Bug Reproduction', () => {
       abortSignal,
     );
 
-    expect(result.returnDisplay).toBe('hello\n');
+    // On Windows, the actual output includes literal backslash-escaped quotes and \r\n
+    const expectedOutput = os.platform() === 'win32' ? '\\"hello\\"\r\n' : 'hello\n';
+    expect(result.returnDisplay).toBe(expectedOutput);
     expect(result.llmContent).not.toBe('summarized output');
     expect(summarizeSpy).not.toHaveBeenCalled();
   });

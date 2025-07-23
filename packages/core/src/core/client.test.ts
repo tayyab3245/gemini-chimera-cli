@@ -586,6 +586,22 @@ describe('Gemini Client (client.ts)', () => {
         parts: [{ text: 'This is a summary.' }],
       });
 
+      // Mock startChat to return a new chat with expected history
+      const newMockChat = {
+        getHistory: vi.fn().mockReturnValue([
+          { role: 'user', parts: [{ text: 'system context' }] },
+          { role: 'model', parts: [{ text: 'system response' }] },
+          { role: 'user', parts: [{ text: 'This is a summary.' }] },
+          { role: 'model', parts: [{ text: 'Got it. Thanks for the additional context!' }] },
+          { role: 'user', parts: [{ text: '...history 10...' }] }, // The last user message that should be kept
+        ]),
+        addHistory: vi.fn(),
+        setHistory: vi.fn(),
+        sendMessage: vi.fn(),
+      } as unknown as GeminiChat;
+      
+      client['startChat'] = vi.fn().mockResolvedValue(newMockChat);
+
       const initialChat = client.getChat();
       const result = await client.tryCompressChat('prompt-id-3');
       const newChat = client.getChat();

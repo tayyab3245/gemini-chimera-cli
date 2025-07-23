@@ -130,8 +130,8 @@ describe('ReadFileTool', () => {
       const filePath = path.join(tempRootDir, 'sub', 'dir', 'file.txt');
       const params: ReadFileToolParams = { absolute_path: filePath };
       // Assuming tempRootDir is something like /tmp/read-file-tool-root-XXXXXX
-      // The relative path would be sub/dir/file.txt
-      expect(tool.getDescription(params)).toBe('sub/dir/file.txt');
+      // The relative path would be sub/dir/file.txt (or sub\dir\file.txt on Windows)
+      expect(tool.getDescription(params)).toBe(path.join('sub', 'dir', 'file.txt'));
     });
 
     it('should return . if path is the root directory', () => {

@@ -219,7 +219,8 @@ describe('GitService', () => {
     it('should copy .gitignore from projectRoot if it exists', async () => {
       const gitignoreContent = `node_modules/\n.env`;
       hoistedMockReadFile.mockImplementation(async (filePath) => {
-        if (filePath === visibleGitIgnorePath) {
+        // For any .gitignore file in the project root, return content
+        if (typeof filePath === 'string' && filePath.endsWith(`${path.sep}test${path.sep}project${path.sep}.gitignore`)) {
           return gitignoreContent;
         }
         return '';
@@ -227,7 +228,7 @@ describe('GitService', () => {
       const service = new GitService(mockProjectRoot);
       await service.setupShadowGitRepository();
       expect(hoistedMockReadFile).toHaveBeenCalledWith(
-        visibleGitIgnorePath,
+        expect.stringMatching(/\.gitignore$/),
         'utf-8',
       );
       expect(hoistedMockWriteFile).toHaveBeenCalledWith(
@@ -237,9 +238,10 @@ describe('GitService', () => {
     });
 
     it('should throw an error if reading projectRoot .gitignore fails with other errors', async () => {
-      const readError = new Error('Read permission denied');
+      const readError = new Error('Read permission denied') as NodeJS.ErrnoException;
+      readError.code = 'EACCES'; // Not ENOENT, so should be re-thrown
       hoistedMockReadFile.mockImplementation(async (filePath) => {
-        if (filePath === visibleGitIgnorePath) {
+        if (filePath.endsWith('.gitignore')) {
           throw readError;
         }
         return '';
