@@ -19,6 +19,7 @@ vi.mock('./gitUtils.js');
 describe('GitIgnoreParser', () => {
   let parser: GitIgnoreParser;
   const mockProjectRoot = path.join('/', 'test', 'project');
+  const resolvedMockProjectRoot = path.resolve(mockProjectRoot);
 
   beforeEach(() => {
     parser = new GitIgnoreParser(mockProjectRoot);
@@ -64,7 +65,7 @@ node_modules/
     it('should handle git exclude file', () => {
       vi.mocked(fs.readFileSync).mockImplementation((filePath) => {
         if (
-          filePath === path.join(mockProjectRoot, '.git', 'info', 'exclude')
+          filePath === path.join(resolvedMockProjectRoot, '.git', 'info', 'exclude')
         ) {
           return 'temp/\n*.tmp';
         }
@@ -80,7 +81,7 @@ node_modules/
     it('should handle custom patterns file name', () => {
       vi.mocked(isGitRepository).mockReturnValue(false);
       vi.mocked(fs.readFileSync).mockImplementation((filePath) => {
-        if (filePath === path.join(mockProjectRoot, '.geminiignore')) {
+        if (filePath === path.join(resolvedMockProjectRoot, '.geminiignore')) {
           return 'temp/\n*.tmp';
         }
         throw new Error('ENOENT');
