@@ -4,54 +4,8 @@ import { KernelAgent } from '../agents/kernel.js';
 import { SynthAgent } from '../agents/synth.js';
 import { DriveAgent } from '../agents/drive.js';
 import { AuditAgent } from '../agents/audit.js';
+import { withTimeout, withRetries } from './recovery.js';
 import type { AgentContext } from '../agents/agent.js';
-
-// Inline timeout and retry helpers for T12
-function withTimeout<T>(p: Promise<T>, ms = 60_000): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error('timeout'));
-    }, ms);
-
-    p.then(
-      (value) => {
-        clearTimeout(timeoutId);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      }
-    );
-  });
-}
-
-async function withRetries<T>(
-  fn: () => Promise<T>,
-  max = 3,
-  firstDelayMs = 250,
-): Promise<T> {
-  let lastError: Error;
-  
-  for (let attempt = 0; attempt <= max; attempt++) {
-    try {
-      if (attempt > 0) {
-        const delayMs = firstDelayMs * Math.pow(2, attempt - 1);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-      
-      return await fn();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      
-      if (attempt === max) {
-        throw lastError;
-      }
-    }
-  }
-  
-  throw lastError!;
-}
 
 export enum WorkflowState {
   INIT = 'INIT',
