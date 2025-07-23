@@ -17,7 +17,7 @@
 
 ## Overview
 
-Project Chimera is an **early-stage experimental** extension to Google's Gemini CLI that implements a hierarchical multi-agent system for AI-assisted software development. Instead of relying on a single AI agent, it orchestrates multiple specialized agents (Master, Architect, Implementer, Critic) to handle complex coding tasks with better context retention and quality control.
+Project Chimera is an **early-stage experimental** extension to Google's Gemini CLI that implements a hierarchical multi-agent system for AI-assisted software development. Instead of relying on a single AI agent, it orchestrates multiple specialized agents (KERNEL, SYNTH, DRIVE, AUDIT) to handle complex coding tasks with better context retention and quality control.
 
 **⚠️ EXPERIMENTAL STATUS**: This is a proof-of-concept implementation. Core architecture is complete but **NO TESTING HAS BEEN PERFORMED**. Not suitable for any production use.
 
@@ -52,10 +52,10 @@ Traditional AI coding assistants suffer from several limitations when handling c
 
 Project Chimera addresses these issues by creating specialized AI agents with distinct roles:
 
-- **Master Agent**: Interprets user requests and manages workflow routing
-- **Architect Agent**: Creates structured plans with JSON schema validation
-- **Implementer Agent**: Executes file operations and code generation using Gemini CLI tools
-- **Critic Agent**: Reviews output quality against the original plan
+- **KERNEL**: Acts as intelligent supervisor and AI consultant, managing workflow orchestration
+- **SYNTH**: Synthesizes strategic plans with embedded software engineering best practices
+- **DRIVE**: Executes individual plan steps using Gemini CLI tools with progress streaming
+- **AUDIT**: Reviews output quality against built-in constitution and standards
 
 Each agent maintains isolated conversation context to prevent cross-contamination of reasoning.
 
@@ -63,21 +63,29 @@ Each agent maintains isolated conversation context to prevent cross-contaminatio
 
 ### Core Agent Roles
 
-**Master Agent** - Request Processing & Workflow Orchestration
-- Routes complex tasks to multi-agent pipeline
-- Falls back to single-agent mode for simple requests
-- Maintains conversation history
+**KERNEL** - Intelligent Supervision & Consultative Orchestration
+- Acts as AI consultant, proactively asking clarifying questions
+- Provides live supervision with real-time progress streaming
+- Manages fault tolerance, timeouts, and recovery mechanisms
+- Routes context intelligently using need-to-know principle
 
-**Architect Agent** - Strategic Planning & JSON Schema Compliance  
-- Generates structured `ChimeraPlan` objects validated against JSON schema
+**SYNTH** - Strategic Planning with Embedded Expertise  
+- Synthesizes structured `ChimeraPlan` objects with JSON schema validation
+- Encodes software engineering best practices (testing, documentation, error handling)
 - Implements retry mechanisms for invalid JSON output
 - Maintains architectural consistency through persistent plan state
 
-**Implementer Agent** - Tool Execution & Artifact Generation
-- Executes file system operations via Gemini CLI tools
+**DRIVE** - Tool Execution & Progress Streaming
+- Executes individual plan steps using Gemini CLI tools
+- Provides real-time progress updates during execution
 - Includes "nudge" mechanism to encourage tool usage over plain text
-- Returns structured execution reports
 - Enhanced error capture and artifact tracking
+
+**AUDIT** - Quality Assurance with Built-in Constitution
+- Reviews output against embedded quality standards (security, performance, style)
+- Implements comprehensive testing and documentation checks
+- Provides structured feedback for re-planning loops
+- Enforces quality gates automatically
 
 ### Enhanced JSON Processing System
 
@@ -91,21 +99,15 @@ Each agent maintains isolated conversation context to prevent cross-contaminatio
 - AJV integration with format support (eliminates date-time warnings)
 - Comprehensive error reporting with detailed validation feedback
 
-**Critic Agent** - Quality Assurance & Plan Validation
-- Reviews Implementer output against Architect's plan
-- Complete re-plan loop with plan modification capabilities
-- Bounded retry logic with maximum replan limits
-- Structured feedback integration with plan state persistence
-
 ### Real-Time Debugging System
 
 Basic telemetry system provides workflow visibility:
 
 ```
-[12:34:56.789] MASTER complex task detected - activating multi-agent workflow
-[12:34:57.123] ARCHITECT generating strategic plan...
-[12:34:58.456] IMPLEMENTER executing step 1/3: create project structure  
-[12:34:59.789] CRITIC reviewing implementation quality...
+[12:34:56.789] KERNEL complex task detected - activating multi-agent workflow
+[12:34:57.123] SYNTH generating strategic plan...
+[12:34:58.456] DRIVE executing step 1/3: create project structure  
+[12:34:59.789] AUDIT reviewing implementation quality...
 ```
 
 Enable with: `export CHIMERA_DEBUG=1`
@@ -114,114 +116,210 @@ Enable with: `export CHIMERA_DEBUG=1`
 
 ```mermaid
 graph TD
-    A[Master Agent] --> B[Architect Agent]
-    B --> C[Implementer Agent]
-    C --> D[Critic Agent]
+    A[KERNEL] --> B[SYNTH]
+    B --> C[DRIVE]
+    C --> D[AUDIT]
     D --> E{Quality Check}
     E -->|Pass| F[Success]
     E -->|Fail| B
     
-    B --> G[Plan Persistence]
-    C --> H[Tool Execution]
-    D --> I[Quality Review]
+    A --> G[Context Brokering]
+    B --> H[Plan Persistence]
+    C --> I[Tool Execution]
+    D --> J[Quality Review]
 ```
 
 ## Development Progress
 
-### Phase 1: Core Architecture & Integration - COMPLETED
-**Objective**: Establish multi-agent orchestration within Gemini CLI
+### Phase 1: Legacy Multi-Agent Prototype - PROOF OF CONCEPT
+**Objective**: Validate multi-agent orchestration concept
 
-**Completed**:
-- `ChimeraOrchestrator` extends `GeminiChat` for API compatibility
-- Isolated agent instances with separate conversation histories
-- Backward compatibility with existing CLI workflows
+**Experimental Implementation**:
+- Basic orchestrator with agent separation
+- Simple workflow: KERNEL→SYNTH→DRIVE→AUDIT
+- JSON schema validation framework
 
-### Phase 2: Schema-Driven Communication - COMPLETED
-**Objective**: Implement structured inter-agent communication
+**Status**: Concept validated, but **architecture needs complete redesign**
 
-**Completed**:
-- `ChimeraPlan` and `CriticReview` TypeScript interfaces
-- JSON schema validation with automatic retry mechanisms
-- Error handling for malformed agent outputs
+### Phase 2: Architecture v2.0 Design - IN PROGRESS
+**Objective**: Design modular, production-ready agent system
 
-### Phase 3: JSON Generation Reliability - COMPLETED
-**Objective**: Improve Architect agent's JSON output consistency
+**Current Work**:
+- KERNEL/SYNTH/DRIVE/AUDIT role definitions
+- Need-to-know context management design
+- Embedded expertise architecture planning
+- Fault tolerance and recovery mechanisms
 
-**Completed**:
-- Streamlined agent prompts to reduce verbose responses
-- JSON-first input approach using `JSON.stringify()`
-- Enhanced error handling with markdown cleanup
+**Status**: **Design phase** - modular architecture being planned
 
-### Phase 4: Tool Execution & File System Integration - COMPLETED
-**Objective**: Enable real-world code execution
+### Phase 3: Modular Implementation - PLANNED
+**Objective**: Scaffold v2.0 architecture with proper separation
 
-**Completed**:
-- `_runImplementerStep` method for orchestrating tool calls
-- "Nudge" mechanism to prompt tool usage
-- Structured execution reporting with error details
+**Implementation Strategy**:
+1. **Interfaces First**: Create `agents/agent.ts`, `event-bus/types.ts` with type definitions
+2. **KERNEL Skeleton**: Implement basic supervisor that logs each workflow stage  
+3. **Stub Agents**: Create agents that return canned JSON for workflow testing
+4. **Finite State Machine**: Build `coordination/workflow.ts` for state management
+5. **Replace Stubs**: Swap canned responses with real Gemini API calls
 
-### Phase 5: Observability & Debugging - COMPLETED
-**Objective**: Add workflow visibility
+**Scaffolding Steps**:
+- [ ] Create empty files with minimal exports (no business logic)
+- [ ] Implement event bus and logging infrastructure  
+- [ ] Build workflow state machine with stub agents
+- [ ] Add context broker for need-to-know data slicing
+- [ ] Replace stubs with actual Gemini integration
 
-**Completed**:
-- Real-time colored telemetry with timestamps
-- Environment-controlled debug output via `CHIMERA_DEBUG`
-- Persistent plan state in `.chimera/plan.json`
+**Status**: **Ready to begin** - directory structure and implementation plan defined
 
-### Phase 6: Smart JSON Extraction & Error Recovery - COMPLETED
-**Objective**: Handle LLM "emo" responses and malformed JSON
+## Implementation Methodology
 
-**Completed**:
-- `extractJsonBlock()` helper tolerates prose wrappers and markdown formatting
-- `_tryParseJson()` with multiple parsing strategies and fallback mechanisms
-- Robust JSON extraction from conversational AI responses
+### Scaffolding Approach
+The v2.0 architecture will be built incrementally using a **"interfaces-first, stubs-second, integration-last"** methodology:
 
-### Phase 7: Critic Re-plan Loop - COMPLETED
-**Objective**: Implement complete feedback and plan modification cycle
+#### Phase 3.1: Foundation (Interfaces & Types)
+- Create type definitions and interfaces without implementation
+- Establish event bus architecture for logging and metrics
+- Define agent contracts and communication protocols
 
-**Completed**:
-- `_criticLoop()` method with bounded retry logic (MAX_REPLANS = 3)
-- `_applyMods()` function for applying Critic modifications to plans
-- End-to-end workflow: Master → Architect → Implementer → Critic → Re-plan
-- Plan state persistence throughout review cycles
+#### Phase 3.2: Workflow Engine (Stubs & State Machine)  
+- Build finite state machine for `KERNEL → SYNTH → DRIVE → AUDIT` flow
+- Implement stub agents that return predictable canned responses
+- Test complete workflow with mock data to validate state transitions
 
-### Phase 8: Production Hardening - COMPLETED
-**Objective**: Schema validation, path resolution, and state management
+#### Phase 3.3: Context Management
+- Implement need-to-know context broker and filtering utilities
+- Add timeout/retry recovery mechanisms
+- Build comprehensive test harness with Gemini API mocks
 
-**Completed**:
-- Enhanced `jsonValidator.ts` with dual-path resolution (src/dist compatibility)
-- AJV schema validation with format support (eliminates date-time warnings)
-- Master agent state re-initialization for clean workflow starts
-- Comprehensive error handling and graceful degradation
+#### Phase 3.4: Real Integration
+- Replace stub agents with actual Gemini API calls
+- Integrate existing tool system with new DRIVE agent
+- Add embedded expertise prompts to SYNTH and AUDIT agents
 
-### Phase 9: End-to-End Validation - **EXPERIMENTAL/UNTESTED**
-**Objective**: Complete system testing and workflow verification
+#### Phase 3.5: Interactive Features
+- Build React/Electron UI package for real-time monitoring
+- Add pause/resume/amend workflow controls
+- Implement live progress streaming and user interaction
 
-**Theoretical Implementation**:
-- Schema path resolution implemented
-- Multi-agent workflow orchestration coded
-- Plan persistence and state management designed
-- Debug logging and telemetry functional
+### Benefits of This Approach
+- **Testable Early**: Workflow logic can be tested before API integration
+- **Parallel Development**: UI can be built against stub APIs
+- **Risk Mitigation**: Each phase builds on validated foundations
+- **Incremental Value**: Each phase delivers working functionality
 
-**⚠️ CRITICAL GAPS**:
-- **NO END-TO-END TESTING PERFORMED**
-- Workflow may hang or fail at runtime
-- Agent communication reliability unverified
-- Tool integration stability unknown
-- Error handling paths not validated
+### Phase 4: Testing & Validation - PLANNED
+**Objective**: Validate multi-agent concepts and fix stability issues
+
+**Required Work**:
+- Resolve current KERNEL timeout/hanging issues
+- Test basic agent communication flows
+- Validate JSON schema processing
+- Implement comprehensive error handling
+
+**Status**: **Blocked** - current prototype has known stability issues
+
+### Phase 5: Interactive Features - PLANNED
+**Objective**: Implement real-time supervision and user interaction
+
+**Planned Features**:
+- Live progress streaming during DRIVE execution
+- Pause/resume/amend workflow controls
+- Conversational course correction capabilities
+- Real-time UI with agent status display
+
+**Status**: **Future work** - depends on stable core implementation
+
+### Phase 6: Production Hardening - PLANNED
+**Objective**: Prepare for real-world usage
+
+**Requirements**:
+- Comprehensive test suite
+- Performance optimization and caching
+- Security review and data safety measures
+- Documentation and contribution guidelines
+
+**Status**: **Long-term goal** - requires stable v2.0 implementation
 
 ## Technical Architecture
 
+### Current State (Legacy Prototype)
 ```
 packages/core/src/
 ├── core/
-│   ├── chimeraOrchestrator.ts     # Main multi-agent orchestrator
-│   └── index.ts                   # Modified to use ChimeraOrchestrator
+│   ├── chimeraOrchestrator.ts     # Monolithic prototype (needs redesign)
+│   └── index.ts                   # Basic integration
 ├── interfaces/
-│   └── chimera.ts                 # ChimeraPlan and CriticReview types
+│   └── chimera.ts                 # Legacy plan types
 └── schemas/
-    └── chimeraPlan.schema.json    # ChimeraPlan validation schema
+    └── chimeraPlan.schema.json    # Basic schema validation
 ```
+
+### Planned v2.0 Architecture (Modular Design)
+```
+project-root/
+├── packages/
+│   ├── cli/                       # Terminal front-end (largely unchanged)
+│   │   ├── src/
+│   │   │   ├── commands/          # argv parsing, interactive shell
+│   │   │   ├── render/            # fancy console output, themes
+│   │   │   └── index.ts
+│   │   └── package.json
+│   │
+│   ├── ui/                        # (Phase-3) React/Electron dashboard
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   └── index.tsx
+│   │   └── package.json
+│   │
+│   └── core/
+│       ├── src/
+│       │   ├── agents/            # === **NEW** intelligent modules
+│       │   │   ├── kernel.ts      # high-level supervisor
+│       │   │   ├── synth.ts       # strategic planner
+│       │   │   ├── drive.ts       # executor / tool caller
+│       │   │   └── audit.ts       # quality reviewer
+│       │   │
+│       │   ├── context/           # need-to-know data plumbing
+│       │   │   ├── broker.ts
+│       │   │   └── filters.ts
+│       │   │
+│       │   ├── coordination/      # workflow engine + recovery logic
+│       │   │   ├── workflow.ts    # state machine (Replan|Done|Failed)
+│       │   │   └── recovery.ts    # retry / timeout helpers
+│       │   │
+│       │   ├── event-bus/         # single-source-of-truth for logs/metrics
+│       │   │   ├── types.ts
+│       │   │   └── bus.ts
+│       │   │
+│       │   ├── tools/             # FILE / SHELL / FETCH etc. (existing)
+│       │   │   └── ...
+│       │   │
+│       │   ├── schemas/           # JSON Schema files (e.g. ChimeraPlan)
+│       │   ├── utils/             # logger, jsonValidator, timeouts
+│       │   └── index.ts           # re-exports, factory helpers
+│       │
+│       ├── tests/
+│       │   ├── agents.test.ts
+│       │   └── workflow.test.ts
+│       └── package.json
+│
+├── scripts/                       # build & release automation
+├── .vscode/                       # launch configs, recommended extensions
+└── README.md
+```
+
+### Module Responsibilities
+
+| **Folder** | **Purpose** | **Implementation Status** |
+|------------|-------------|---------------------------|
+| **agents/** | Core AI agents with injected GeminiChat, timeout helpers, and specialized run() methods | **TODO** - Class skeletons needed |
+| **context/** | ContextBroker service for need-to-know data slicing + filter utilities | **TODO** - Broker and filters |
+| **coordination/** | Finite-state-machine orchestration + recovery logic with timeout/retry | **TODO** - Workflow FSM + recovery |
+| **event-bus/** | Pub/sub observable for logs/metrics that CLI prints and UI subscribes to | **TODO** - Event system |
+| **tests/** | Jest/Vitest harnesses with Gemini mocks and smoke tests | **TODO** - Test framework |
+
+**Status**: Current implementation uses legacy architecture. v2.0 modular design is **planned but not implemented**.
 
 ## ⚠️ CRITICAL DISCLAIMER
 
@@ -281,7 +379,7 @@ gemini
 
 ### **CRITICAL EXPERIMENTAL LIMITATIONS**
 - **Zero Testing**: No end-to-end validation has been performed
-- **Runtime Stability**: System may hang indefinitely on Master agent calls (known timeout issues)
+- **Runtime Stability**: System may hang indefinitely on KERNEL agent calls (known timeout issues)
 - **Error Recovery**: Fault tolerance mechanisms are untested and may not function
 - **Tool Integration**: File system operations may fail or behave unpredictably
 - **Performance**: No optimization or benchmarking; may consume excessive resources
@@ -294,7 +392,7 @@ gemini
 - **Schema Validation**: JSON parsing robustness untested under real conditions
 
 ### Recently Identified Issues (UNRESOLVED)
-- **API Hanging**: Master agent calls may timeout or hang indefinitely
+- **API Hanging**: KERNEL agent calls may timeout or hang indefinitely
 - **Message Extraction**: Bullet-proof parsing may still fail with edge cases
 - **Workflow Interruption**: No graceful handling of user cancellation or system errors
 - **Resource Management**: No cleanup of partial states or temporary files
@@ -307,9 +405,11 @@ gemini
 - **Performance Analysis**: Benchmark resource usage and optimize critical paths
 
 ### Planned Improvements
-- Complete Critic agent feedback integration
-- Comprehensive evaluation harness to measure effectiveness
-- VS Code extension for visual workflow monitoring
+- Implement v2.0 modular architecture (KERNEL/SYNTH/DRIVE/AUDIT)
+- Resolve stability issues and implement comprehensive testing
+- Build interactive UI with real-time agent status monitoring
+- Add embedded expertise and need-to-know context management
+- Develop VS Code extension for visual workflow monitoring
 - Enhanced tool integration (Python interpreter, linters, etc.)
 - Performance optimization and caching
 
