@@ -13,6 +13,13 @@ export interface ProgressPayload {
   percent: number;         // rounded integer 0‑100
 }
 
+export interface ErrorPayload {
+  agent: 'DRIVE' | 'AUDIT';
+  stepId?: string;         // present if DRIVE failed
+  message: string;         // human‑readable summary
+  details?: unknown;       // optional raw error / review object
+}
+
 export type ChimeraEventHandler<T> = (evt: ChimeraEvent<T>) => void;
 
 /** identity of a Chimera agent */

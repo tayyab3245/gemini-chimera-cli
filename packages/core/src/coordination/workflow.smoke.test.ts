@@ -4,7 +4,7 @@ import { WorkflowEngine, WorkflowState, advance } from './workflow.js';
 import { AuditAgent } from '../agents/audit.js';
 import { DriveAgent } from '../agents/drive.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
-import { ProgressPayload } from '../event-bus/types.js';
+import { ProgressPayload, ErrorPayload } from '../event-bus/types.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { Config } from '../config/config.js';
@@ -230,5 +230,146 @@ describe('Workflow Smoke Tests', () => {
       const fileContents = await fs.readFile(testFilePath, 'utf-8');
       expect(fileContents).toBe(testContent);
     });
+  });
+
+  it('should emit error event when DriveAgent fails on step 2', async () => {
+    const engine = new WorkflowEngine();
+    const errorEvents: ErrorPayload[] = [];
+
+    // Subscribe to error events
+    engine['bus'].subscribe('error', (event) => {
+      errorEvents.push(event.payload as ErrorPayload);
+    });
+
+    // Mock the synth result to return a 3-step plan
+    const originalSynthRun = engine['synth'].run;
+    engine['synth'].run = async () => {
+      return {
+        ok: true,
+        output: {
+          planJson: JSON.stringify({
+            task_id: 'test-drive-failure',
+            plan: [
+              { step_id: 'S1', description: 'Step 1' },
+              { step_id: 'S2', description: 'Step 2' },
+              { step_id: 'S3', description: 'Step 3' }
+            ],
+            status: 'pending'
+          })
+        }
+      };
+    };
+
+    // Mock the drive agent to fail on step 2
+    const originalDriveRun = engine['drive'].run;
+    let callCount = 0;
+    engine['drive'].run = async (context) => {
+      callCount++;
+      if (callCount === 2) { // Fail on second call (step 2)
+        return {
+          ok: false,
+          error: 'Simulated drive failure on step 2'
+        };
+      }
+      return {
+        ok: true,
+        output: {
+          artifacts: ['mock-artifact']
+        }
+      };
+    };
+
+    try {
+      await engine.run({ userInput: 'Test drive failure' });
+      expect.fail('Expected workflow to throw error');
+    } catch (error) {
+      // Expected to throw
+    }
+
+    // Verify error event was emitted correctly
+    expect(errorEvents).toHaveLength(1);
+    expect(errorEvents[0]).toEqual({
+      agent: 'DRIVE',
+      stepId: 'S2',
+      message: 'Drive failed on step S2',
+      details: 'Simulated drive failure on step 2'
+    });
+
+    // Restore original methods
+    engine['synth'].run = originalSynthRun;
+    engine['drive'].run = originalDriveRun;
+  });
+
+  it('should emit error event when AuditAgent returns pass:false', async () => {
+    const engine = new WorkflowEngine();
+    const errorEvents: ErrorPayload[] = [];
+
+    // Subscribe to error events
+    engine['bus'].subscribe('error', (event) => {
+      errorEvents.push(event.payload as ErrorPayload);
+    });
+
+    // Mock the synth result to return a simple plan
+    const originalSynthRun = engine['synth'].run;
+    engine['synth'].run = async () => {
+      return {
+        ok: true,
+        output: {
+          planJson: JSON.stringify({
+            task_id: 'test-audit-failure',
+            plan: [
+              { step_id: 'S1', description: 'Step 1' }
+            ],
+            status: 'pending'
+          })
+        }
+      };
+    };
+
+    // Mock the drive agent to succeed
+    const originalDriveRun = engine['drive'].run;
+    engine['drive'].run = async () => {
+      return {
+        ok: true,
+        output: {
+          artifacts: ['mock-artifact']
+        }
+      };
+    };
+
+    // Mock the audit agent to return pass:false
+    const originalAuditRun = engine['audit'].run;
+    engine['audit'].run = async () => {
+      return {
+        ok: true,
+        output: {
+          pass: false,
+          reasons: ['Test audit failure']
+        }
+      };
+    };
+
+    try {
+      await engine.run({ userInput: 'Test audit failure' });
+      expect.fail('Expected workflow to throw error');
+    } catch (error) {
+      // Expected to throw
+    }
+
+    // Verify error event was emitted correctly
+    expect(errorEvents).toHaveLength(1);
+    expect(errorEvents[0]).toEqual({
+      agent: 'AUDIT',
+      message: 'Audit failed',
+      details: {
+        pass: false,
+        reasons: ['Test audit failure']
+      }
+    });
+
+    // Restore original methods
+    engine['synth'].run = originalSynthRun;
+    engine['drive'].run = originalDriveRun;
+    engine['audit'].run = originalAuditRun;
   });
 });

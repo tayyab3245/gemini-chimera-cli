@@ -1,6 +1,6 @@
 
 import { ChimeraEventBus } from '../event-bus/bus.js';
-import { ProgressPayload } from '../event-bus/types.js';
+import { ProgressPayload, ErrorPayload } from '../event-bus/types.js';
 import { KernelAgent } from '../agents/kernel.js';
 import { SynthAgent } from '../agents/synth.js';
 import { DriveAgent } from '../agents/drive.js';
@@ -142,8 +142,40 @@ export class WorkflowEngine {
           3
         );
         
-        if (!driveResult.ok || !driveResult.output) {
+        if (!driveResult.ok) {
+          // Emit error event for Drive failure
+          const errorPayload: ErrorPayload = {
+            agent: 'DRIVE',
+            stepId: stepId,
+            message: `Drive failed on step ${stepId}`,
+            details: driveResult.error
+          };
+          
+          this.bus.publish({ 
+            ts: Date.now(), 
+            type: 'error', 
+            payload: errorPayload 
+          });
+          
           throw new Error(`Drive failed on step ${stepId}: ${driveResult.error}`);
+        }
+        
+        if (!driveResult.output) {
+          // Emit error event for missing output
+          const errorPayload: ErrorPayload = {
+            agent: 'DRIVE',
+            stepId: stepId,
+            message: `Drive failed on step ${stepId}: no output`,
+            details: { error: 'Missing output from drive result' }
+          };
+          
+          this.bus.publish({ 
+            ts: Date.now(), 
+            type: 'error', 
+            payload: errorPayload 
+          });
+          
+          throw new Error(`Drive failed on step ${stepId}: no output`);
         }
 
         // Collect artifacts from this step
@@ -182,8 +214,56 @@ export class WorkflowEngine {
         3
       );
       
-      if (!auditResult.ok || !auditResult.output) {
+      if (!auditResult.ok) {
+        // Emit error event for Audit failure
+        const errorPayload: ErrorPayload = {
+          agent: 'AUDIT',
+          message: 'Audit failed',
+          details: auditResult.error
+        };
+        
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'error', 
+          payload: errorPayload 
+        });
+        
         throw new Error(`Audit failed: ${auditResult.error}`);
+      }
+      
+      if (!auditResult.output) {
+        // Emit error event for missing audit output
+        const errorPayload: ErrorPayload = {
+          agent: 'AUDIT',
+          message: 'Audit failed: no output',
+          details: { error: 'Missing output from audit result' }
+        };
+        
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'error', 
+          payload: errorPayload 
+        });
+        
+        throw new Error(`Audit failed: no output`);
+      }
+
+      // Check if audit review passed
+      if (auditResult.output.pass === false) {
+        // Emit error event for failed audit review
+        const errorPayload: ErrorPayload = {
+          agent: 'AUDIT',
+          message: 'Audit failed',
+          details: auditResult.output
+        };
+        
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'error', 
+          payload: errorPayload 
+        });
+        
+        throw new Error('Audit review failed');
       }
 
       // Advance to done state
@@ -194,12 +274,7 @@ export class WorkflowEngine {
       return auditResult.output;
 
     } catch (error) {
-      // Publish error event and set state to DONE (fail)
-      this.bus.publish({ 
-        ts: Date.now(), 
-        type: 'error', 
-        payload: `Workflow failed: ${error instanceof Error ? error.message : String(error)}` 
-      });
+      // Only set state to DONE (fail) - error events are published by specific handlers above
       this.state = WorkflowState.DONE;
       throw error;
     }
