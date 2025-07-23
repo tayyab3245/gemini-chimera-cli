@@ -1,5 +1,6 @@
 
 import { ChimeraEventBus } from '../event-bus/bus.js';
+import { ProgressPayload } from '../event-bus/types.js';
 import { KernelAgent } from '../agents/kernel.js';
 import { SynthAgent } from '../agents/synth.js';
 import { DriveAgent } from '../agents/drive.js';
@@ -109,19 +110,59 @@ export class WorkflowEngine {
         throw new Error(`Synth failed: ${synthResult.error}`);
       }
 
-      // 3. Drive phase - execute each step (for now, just one step)
-      const driveContext: AgentContext<{ stepJson: any }> = {
-        input: { stepJson: { stepId: "step_1", planJson: synthResult.output.planJson } },
-        bus: this.bus
-      };
-      
-      const driveResult = await withRetries(
-        () => withTimeout(this.drive.run(driveContext), 60_000),
-        3
-      );
-      
-      if (!driveResult.ok || !driveResult.output) {
-        throw new Error(`Drive failed: ${driveResult.error}`);
+      // 3. Drive phase - execute each step
+      let planSteps: any[] = [];
+      try {
+        const plan = JSON.parse(synthResult.output.planJson);
+        planSteps = plan.plan || [];
+      } catch (error) {
+        throw new Error(`Invalid planJson structure: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      const totalSteps = planSteps.length;
+      let allArtifacts: string[] = [];
+
+      for (let stepIndex = 0; stepIndex < totalSteps; stepIndex++) {
+        const step = planSteps[stepIndex];
+        const stepId = step.step_id || step.stepId || `step_${stepIndex + 1}`;
+        
+        const driveContext: AgentContext<{ stepJson: any }> = {
+          input: { 
+            stepJson: { 
+              stepId: stepId,
+              description: step.description,
+              planJson: synthResult.output.planJson 
+            } 
+          },
+          bus: this.bus
+        };
+        
+        const driveResult = await withRetries(
+          () => withTimeout(this.drive.run(driveContext), 60_000),
+          3
+        );
+        
+        if (!driveResult.ok || !driveResult.output) {
+          throw new Error(`Drive failed on step ${stepId}: ${driveResult.error}`);
+        }
+
+        // Collect artifacts from this step
+        allArtifacts.push(...driveResult.output.artifacts);
+
+        // Emit progress event after successful step completion
+        const percent = Math.round(((stepIndex + 1) / totalSteps) * 100);
+        const progressPayload: ProgressPayload = {
+          stepId: stepId,
+          stepIndex: stepIndex,
+          totalSteps: totalSteps,
+          percent: percent
+        };
+        
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'progress', 
+          payload: progressPayload 
+        });
       }
 
       // Advance to review state
@@ -131,7 +172,7 @@ export class WorkflowEngine {
       const auditContext: AgentContext<{ planJson: string; artifacts: string[] }> = {
         input: { 
           planJson: synthResult.output.planJson,
-          artifacts: driveResult.output.artifacts
+          artifacts: allArtifacts
         },
         bus: this.bus
       };

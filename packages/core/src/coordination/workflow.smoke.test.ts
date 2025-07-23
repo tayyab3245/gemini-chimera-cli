@@ -4,6 +4,7 @@ import { WorkflowEngine, WorkflowState, advance } from './workflow.js';
 import { AuditAgent } from '../agents/audit.js';
 import { DriveAgent } from '../agents/drive.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
+import { ProgressPayload } from '../event-bus/types.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { Config } from '../config/config.js';
@@ -35,6 +36,84 @@ describe('Workflow Smoke Tests', () => {
   it('should throw error on illegal state transitions', () => {
     expect(() => advance(WorkflowState.INIT, 'invalid_event')).toThrow('illegal transition');
     expect(() => advance(WorkflowState.DONE, 'plan_ready')).toThrow('illegal transition');
+  });
+
+  it('should emit progress events with correct percentages for multi-step plan', async () => {
+    // Create a mock 3-step plan for testing progress events
+    const engine = new WorkflowEngine();
+    const progressEvents: ProgressPayload[] = [];
+
+    // Subscribe to progress events
+    engine['bus'].subscribe('progress', (event) => {
+      progressEvents.push(event.payload as ProgressPayload);
+    });
+
+    // Mock the synth result to return a 3-step plan
+    const originalSynthRun = engine['synth'].run;
+    engine['synth'].run = async () => {
+      return {
+        ok: true,
+        output: {
+          planJson: JSON.stringify({
+            task_id: 'test-progress',
+            plan: [
+              { step_id: 'S1', description: 'Step 1' },
+              { step_id: 'S2', description: 'Step 2' },
+              { step_id: 'S3', description: 'Step 3' }
+            ],
+            status: 'pending'
+          })
+        }
+      };
+    };
+
+    // Mock the drive agent to succeed for all steps
+    const originalDriveRun = engine['drive'].run;
+    engine['drive'].run = async () => {
+      return {
+        ok: true,
+        output: {
+          artifacts: ['mock-artifact']
+        }
+      };
+    };
+
+    try {
+      await engine.run({ userInput: 'Test progress events' });
+    } catch (error) {
+      // Ignore workflow errors, we're only testing progress events
+    }
+
+    // Verify progress events were emitted correctly
+    expect(progressEvents).toHaveLength(3);
+    
+    // Check step 1: 33% (1/3 * 100 rounded)
+    expect(progressEvents[0]).toEqual({
+      stepId: 'S1',
+      stepIndex: 0,
+      totalSteps: 3,
+      percent: 33
+    });
+
+    // Check step 2: 67% (2/3 * 100 rounded)
+    expect(progressEvents[1]).toEqual({
+      stepId: 'S2',
+      stepIndex: 1,
+      totalSteps: 3,
+      percent: 67
+    });
+
+    // Check step 3: 100% (3/3 * 100)
+    expect(progressEvents[2]).toEqual({
+      stepId: 'S3',
+      stepIndex: 2,
+      totalSteps: 3,
+      percent: 100
+    });
+
+    // Restore original methods
+    engine['synth'].run = originalSynthRun;
+    engine['drive'].run = originalDriveRun;
   });
 
   describe('AuditAgent Integration', () => {

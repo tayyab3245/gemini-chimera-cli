@@ -6,6 +6,13 @@ export interface ChimeraEvent<T = unknown> {
   payload: T;
 }
 
+export interface ProgressPayload {
+  stepId: string;          // e.g. "S1"
+  stepIndex: number;       // zero‑based index
+  totalSteps: number;      // plan.plan.length
+  percent: number;         // rounded integer 0‑100
+}
+
 export type ChimeraEventHandler<T> = (evt: ChimeraEvent<T>) => void;
 
 /** identity of a Chimera agent */
