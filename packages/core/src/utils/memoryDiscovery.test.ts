@@ -37,9 +37,9 @@ describe('loadServerHierarchicalMemory', () => {
   const mockFs = fsPromises as Mocked<typeof fsPromises>;
   const mockOs = os as Mocked<typeof os>;
 
-  const CWD = '/test/project/src';
-  const PROJECT_ROOT = '/test/project';
-  const USER_HOME = '/test/userhome';
+  const CWD = path.join('/', 'test', 'project', 'src');
+  const PROJECT_ROOT = path.join('/', 'test', 'project');
+  const USER_HOME = path.join('/', 'test', 'userhome');
 
   let GLOBAL_GEMINI_DIR: string;
   let GLOBAL_GEMINI_FILE: string; // Defined in beforeEach
@@ -577,7 +577,7 @@ describe('loadServerHierarchicalMemory', () => {
   });
 
   it('should load extension context file paths', async () => {
-    const extensionFilePath = '/test/extensions/ext1/GEMINI.md';
+    const extensionFilePath = path.join('/', 'test', 'extensions', 'ext1', 'GEMINI.md');
     mockFs.access.mockImplementation(async (p) => {
       if (p === extensionFilePath) {
         return undefined;

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import * as path from 'path';
 
 // Use a type alias for SpyInstance as it's not directly exported
 type SpyInstance = ReturnType<typeof vi.spyOn>;
@@ -33,7 +34,7 @@ describe('reportError', () => {
   });
 
   const getExpectedReportPath = (type: string) =>
-    `${MOCK_TMP_DIR}/gemini-client-error-${type}-${MOCK_TIMESTAMP}.json`;
+    path.join(MOCK_TMP_DIR, `gemini-client-error-${type}-${MOCK_TIMESTAMP}.json`);
 
   it('should generate a report and log the path', async () => {
     const error = new Error('Test error');

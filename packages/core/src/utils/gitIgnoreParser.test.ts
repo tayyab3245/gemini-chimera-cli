@@ -18,7 +18,7 @@ vi.mock('./gitUtils.js');
 
 describe('GitIgnoreParser', () => {
   let parser: GitIgnoreParser;
-  const mockProjectRoot = '/test/project';
+  const mockProjectRoot = path.join('/', 'test', 'project');
 
   beforeEach(() => {
     parser = new GitIgnoreParser(mockProjectRoot);

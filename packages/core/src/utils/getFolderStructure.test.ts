@@ -29,6 +29,26 @@ vi.mock('./gitUtils.js');
 // Import 'path' again here, it will be the mocked version
 import * as path from 'path';
 
+// Platform-agnostic path constants
+const TESTROOT = path.join('/', 'testroot');
+const TESTROOT_SUBFOLDER_A = path.join(TESTROOT, 'subfolderA');
+const TESTROOT_SUBFOLDER_B = path.join(TESTROOT_SUBFOLDER_A, 'subfolderB');
+const TESTROOT_EMPTY_FOLDER = path.join(TESTROOT, 'emptyFolder');
+const TESTROOT_NODE_MODULES = path.join(TESTROOT, 'node_modules');
+const TESTROOT_MANY_FILES = path.join(TESTROOT, 'manyFilesFolder');
+const TESTROOT_MANY_FOLDERS = path.join(TESTROOT, 'manyFolders');
+const TESTROOT_DEEP_FOLDERS = path.join(TESTROOT, 'deepFolders');
+const TESTROOT_DEEP_LEVEL1 = path.join(TESTROOT_DEEP_FOLDERS, 'level1');
+const TESTROOT_DEEP_LEVEL2 = path.join(TESTROOT_DEEP_LEVEL1, 'level2');
+const TESTROOT_DEEP_LEVEL3 = path.join(TESTROOT_DEEP_LEVEL2, 'level3');
+
+// Test project paths for gitignore tests
+const TEST_PROJECT = path.join('/', 'test', 'project');
+const TEST_PROJECT_NODE_MODULES = path.join(TEST_PROJECT, 'node_modules');
+const TEST_PROJECT_GEMINI = path.join(TEST_PROJECT, '.gemini');
+const TEST_PROJECT_GITIGNORE = path.join(TEST_PROJECT, '.gitignore');
+const TEST_PROJECT_GEMINIIGNORE = path.join(TEST_PROJECT, '.geminiignore');
+
 interface TestDirent {
   name: string;
   isFile: () => boolean;
@@ -90,46 +110,47 @@ describe('getFolderStructure', () => {
   });
 
   const mockFsStructure: Record<string, TestDirent[]> = {
-    '/testroot': [
+    [TESTROOT]: [
       createDirent('file1.txt', 'file'),
       createDirent('subfolderA', 'dir'),
       createDirent('emptyFolder', 'dir'),
       createDirent('.hiddenfile', 'file'),
       createDirent('node_modules', 'dir'),
     ],
-    '/testroot/subfolderA': [
+    [TESTROOT_SUBFOLDER_A]: [
       createDirent('fileA1.ts', 'file'),
       createDirent('fileA2.js', 'file'),
       createDirent('subfolderB', 'dir'),
     ],
-    '/testroot/subfolderA/subfolderB': [createDirent('fileB1.md', 'file')],
-    '/testroot/emptyFolder': [],
-    '/testroot/node_modules': [createDirent('somepackage', 'dir')],
-    '/testroot/manyFilesFolder': Array.from({ length: 10 }, (_, i) =>
+    [TESTROOT_SUBFOLDER_B]: [createDirent('fileB1.md', 'file')],
+    [TESTROOT_EMPTY_FOLDER]: [],
+    [TESTROOT_NODE_MODULES]: [createDirent('somepackage', 'dir')],
+    [TESTROOT_MANY_FILES]: Array.from({ length: 10 }, (_, i) =>
       createDirent(`file-${i}.txt`, 'file'),
     ),
-    '/testroot/manyFolders': Array.from({ length: 5 }, (_, i) =>
+    [TESTROOT_MANY_FOLDERS]: Array.from({ length: 5 }, (_, i) =>
       createDirent(`folder-${i}`, 'dir'),
     ),
     ...Array.from({ length: 5 }, (_, i) => ({
-      [`/testroot/manyFolders/folder-${i}`]: [
+      [path.join(TESTROOT_MANY_FOLDERS, `folder-${i}`)]: [
         createDirent('child.txt', 'file'),
       ],
     })).reduce((acc, val) => ({ ...acc, ...val }), {}),
-    '/testroot/deepFolders': [createDirent('level1', 'dir')],
-    '/testroot/deepFolders/level1': [createDirent('level2', 'dir')],
-    '/testroot/deepFolders/level1/level2': [createDirent('level3', 'dir')],
-    '/testroot/deepFolders/level1/level2/level3': [
+    [TESTROOT_DEEP_FOLDERS]: [createDirent('level1', 'dir')],
+    [TESTROOT_DEEP_LEVEL1]: [createDirent('level2', 'dir')],
+    [TESTROOT_DEEP_LEVEL2]: [createDirent('level3', 'dir')],
+    [TESTROOT_DEEP_LEVEL3]: [
       createDirent('file.txt', 'file'),
     ],
   };
 
   it('should return basic folder structure', async () => {
-    const structure = await getFolderStructure('/testroot/subfolderA');
+    const structure = await getFolderStructure(TESTROOT_SUBFOLDER_A);
+    const displayPath = TESTROOT_SUBFOLDER_A.replace(/\\/g, '/');
     const expected = `
 Showing up to 200 items (files + folders).
 
-/testroot/subfolderA/
+${displayPath}/
 ├───fileA1.ts
 ├───fileA2.js
 └───subfolderB/
@@ -139,21 +160,23 @@ Showing up to 200 items (files + folders).
   });
 
   it('should handle an empty folder', async () => {
-    const structure = await getFolderStructure('/testroot/emptyFolder');
+    const structure = await getFolderStructure(TESTROOT_EMPTY_FOLDER);
+    const displayPath = TESTROOT_EMPTY_FOLDER.replace(/\\/g, '/');
     const expected = `
 Showing up to 200 items (files + folders).
 
-/testroot/emptyFolder/
+${displayPath}/
 `.trim();
     expect(structure.trim()).toBe(expected.trim());
   });
 
   it('should ignore folders specified in ignoredFolders (default)', async () => {
-    const structure = await getFolderStructure('/testroot');
+    const structure = await getFolderStructure(TESTROOT);
+    const displayPath = TESTROOT.replace(/\\/g, '/');
     const expected = `
 Showing up to 200 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (200 items) was reached.
 
-/testroot/
+${displayPath}/
 ├───.hiddenfile
 ├───file1.txt
 ├───emptyFolder/
@@ -168,13 +191,14 @@ Showing up to 200 items (files + folders). Folders or files indicated with ... c
   });
 
   it('should ignore folders specified in custom ignoredFolders', async () => {
-    const structure = await getFolderStructure('/testroot', {
+    const structure = await getFolderStructure(TESTROOT, {
       ignoredFolders: new Set(['subfolderA', 'node_modules']),
     });
+    const displayPath = TESTROOT.replace(/\\/g, '/');
     const expected = `
 Showing up to 200 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (200 items) was reached.
 
-/testroot/
+${displayPath}/
 ├───.hiddenfile
 ├───file1.txt
 ├───emptyFolder/
@@ -185,13 +209,14 @@ Showing up to 200 items (files + folders). Folders or files indicated with ... c
   });
 
   it('should filter files by fileIncludePattern', async () => {
-    const structure = await getFolderStructure('/testroot/subfolderA', {
+    const structure = await getFolderStructure(TESTROOT_SUBFOLDER_A, {
       fileIncludePattern: /\.ts$/,
     });
+    const displayPath = TESTROOT_SUBFOLDER_A.replace(/\\/g, '/');
     const expected = `
 Showing up to 200 items (files + folders).
 
-/testroot/subfolderA/
+${displayPath}/
 ├───fileA1.ts
 └───subfolderB/
 `.trim();
@@ -199,13 +224,14 @@ Showing up to 200 items (files + folders).
   });
 
   it('should handle maxItems truncation for files within a folder', async () => {
-    const structure = await getFolderStructure('/testroot/subfolderA', {
+    const structure = await getFolderStructure(TESTROOT_SUBFOLDER_A, {
       maxItems: 3,
     });
+    const displayPath = TESTROOT_SUBFOLDER_A.replace(/\\/g, '/');
     const expected = `
 Showing up to 3 items (files + folders).
 
-/testroot/subfolderA/
+${displayPath}/
 ├───fileA1.ts
 ├───fileA2.js
 └───subfolderB/
@@ -214,13 +240,14 @@ Showing up to 3 items (files + folders).
   });
 
   it('should handle maxItems truncation for subfolders', async () => {
-    const structure = await getFolderStructure('/testroot/manyFolders', {
+    const structure = await getFolderStructure(TESTROOT_MANY_FOLDERS, {
       maxItems: 4,
     });
+    const displayPath = TESTROOT_MANY_FOLDERS.replace(/\\/g, '/');
     const expectedRevised = `
 Showing up to 4 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (4 items) was reached.
 
-/testroot/manyFolders/
+${displayPath}/
 ├───folder-0/
 ├───folder-1/
 ├───folder-2/
@@ -231,13 +258,14 @@ Showing up to 4 items (files + folders). Folders or files indicated with ... con
   });
 
   it('should handle maxItems that only allows the root folder itself', async () => {
-    const structure = await getFolderStructure('/testroot/subfolderA', {
+    const structure = await getFolderStructure(TESTROOT_SUBFOLDER_A, {
       maxItems: 1,
     });
+    const displayPath = TESTROOT_SUBFOLDER_A.replace(/\\/g, '/');
     const expectedRevisedMax1 = `
 Showing up to 1 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (1 items) was reached.
 
-/testroot/subfolderA/
+${displayPath}/
 ├───fileA1.ts
 ├───...
 └───...
@@ -264,13 +292,14 @@ Showing up to 1 items (files + folders). Folders or files indicated with ... con
   });
 
   it('should handle deep folder structure within limits', async () => {
-    const structure = await getFolderStructure('/testroot/deepFolders', {
+    const structure = await getFolderStructure(TESTROOT_DEEP_FOLDERS, {
       maxItems: 10,
     });
+    const displayPath = TESTROOT_DEEP_FOLDERS.replace(/\\/g, '/');
     const expected = `
 Showing up to 10 items (files + folders).
 
-/testroot/deepFolders/
+${displayPath}/
 └───level1/
     └───level2/
         └───level3/
@@ -280,13 +309,14 @@ Showing up to 10 items (files + folders).
   });
 
   it('should truncate deep folder structure if maxItems is small', async () => {
-    const structure = await getFolderStructure('/testroot/deepFolders', {
+    const structure = await getFolderStructure(TESTROOT_DEEP_FOLDERS, {
       maxItems: 3,
     });
+    const displayPath = TESTROOT_DEEP_FOLDERS.replace(/\\/g, '/');
     const expected = `
 Showing up to 3 items (files + folders).
 
-/testroot/deepFolders/
+${displayPath}/
 └───level1/
     └───level2/
         └───level3/
@@ -302,7 +332,7 @@ describe('getFolderStructure gitignore', () => {
 
     (fsPromises.readdir as Mock).mockImplementation(async (p) => {
       const path = p.toString();
-      if (path === '/test/project') {
+      if (path === TEST_PROJECT) {
         return [
           createDirent('file1.txt', 'file'),
           createDirent('node_modules', 'dir'),
@@ -311,10 +341,10 @@ describe('getFolderStructure gitignore', () => {
           createDirent('.gemini', 'dir'),
         ] as any;
       }
-      if (path === '/test/project/node_modules') {
+      if (path === TEST_PROJECT_NODE_MODULES) {
         return [createDirent('some-package', 'dir')] as any;
       }
-      if (path === '/test/project/.gemini') {
+      if (path === TEST_PROJECT_GEMINI) {
         return [
           createDirent('config.yaml', 'file'),
           createDirent('logs.json', 'file'),
@@ -325,10 +355,10 @@ describe('getFolderStructure gitignore', () => {
 
     (fs.readFileSync as Mock).mockImplementation((p) => {
       const path = p.toString();
-      if (path === '/test/project/.gitignore') {
+      if (path === TEST_PROJECT_GITIGNORE) {
         return 'ignored.txt\nnode_modules/\n.gemini/\n!/.gemini/config.yaml';
       }
-      if (path === '/test/project/.geminiignore') {
+      if (path === TEST_PROJECT_GEMINIIGNORE) {
         return 'gem_ignored.txt\nnode_modules/\n.gemini/\n!/.gemini/config.yaml';
       }
       return '';
@@ -338,8 +368,8 @@ describe('getFolderStructure gitignore', () => {
   });
 
   it('should ignore files and folders specified in .gitignore', async () => {
-    const fileService = new FileDiscoveryService('/test/project');
-    const structure = await getFolderStructure('/test/project', {
+    const fileService = new FileDiscoveryService(TEST_PROJECT);
+    const structure = await getFolderStructure(TEST_PROJECT, {
       fileService,
     });
     expect(structure).not.toContain('ignored.txt');
@@ -348,8 +378,8 @@ describe('getFolderStructure gitignore', () => {
   });
 
   it('should not ignore files if respectGitIgnore is false', async () => {
-    const fileService = new FileDiscoveryService('/test/project');
-    const structure = await getFolderStructure('/test/project', {
+    const fileService = new FileDiscoveryService(TEST_PROJECT);
+    const structure = await getFolderStructure(TEST_PROJECT, {
       fileService,
       fileFilteringOptions: {
         respectGeminiIgnore: false,
@@ -362,8 +392,8 @@ describe('getFolderStructure gitignore', () => {
   });
 
   it('should ignore files and folders specified in .geminiignore', async () => {
-    const fileService = new FileDiscoveryService('/test/project');
-    const structure = await getFolderStructure('/test/project', {
+    const fileService = new FileDiscoveryService(TEST_PROJECT);
+    const structure = await getFolderStructure(TEST_PROJECT, {
       fileService,
     });
     expect(structure).not.toContain('gem_ignored.txt');
@@ -372,8 +402,8 @@ describe('getFolderStructure gitignore', () => {
   });
 
   it('should not ignore files if respectGeminiIgnore is false', async () => {
-    const fileService = new FileDiscoveryService('/test/project');
-    const structure = await getFolderStructure('/test/project', {
+    const fileService = new FileDiscoveryService(TEST_PROJECT);
+    const structure = await getFolderStructure(TEST_PROJECT, {
       fileService,
       fileFilteringOptions: {
         respectGeminiIgnore: false,
