@@ -52,14 +52,24 @@ export class DriveAgent {
         });
 
         // Parse the write command: write:<filePath>:<content>
-        const parts = description.split(':', 3);
-        if (parts.length !== 3) {
+        // To handle Windows paths with drive letters (e.g., C:\path), we need to be careful with splitting
+        const writePrefix = 'write:';
+        if (!description.startsWith(writePrefix)) {
           this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
           return { ok: false, error: 'Invalid write command format. Expected: write:<filePath>:<content>' } as any;
         }
-
-        const filePath = parts[1];
-        const content = parts[2];
+        
+        const afterWrite = description.substring(writePrefix.length);
+        
+        // Find the last colon to separate content from path
+        const lastColonIndex = afterWrite.lastIndexOf(':');
+        if (lastColonIndex === -1) {
+          this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
+          return { ok: false, error: 'Invalid write command format. Expected: write:<filePath>:<content>' } as any;
+        }
+        
+        const filePath = afterWrite.substring(0, lastColonIndex);
+        const content = afterWrite.substring(lastColonIndex + 1);
 
         // Get the write_file tool from the registry
         const writeFileTool = this.toolRegistry.getTool('write_file');
@@ -70,7 +80,7 @@ export class DriveAgent {
 
         // Execute the write_file tool
         const toolParams = {
-          path: filePath,
+          file_path: filePath,
           content: content
         };
 

@@ -1,8 +1,15 @@
 // packages/core/src/coordination/workflow.smoke.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { WorkflowEngine, WorkflowState, advance } from './workflow.js';
 import { AuditAgent } from '../agents/audit.js';
+import { DriveAgent } from '../agents/drive.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
+import { ToolRegistry } from '../tools/tool-registry.js';
+import { WriteFileTool } from '../tools/write-file.js';
+import { Config } from '../config/config.js';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
 
 describe('Workflow Smoke Tests', () => {
   let engine: WorkflowEngine;
@@ -53,6 +60,96 @@ describe('Workflow Smoke Tests', () => {
       expect(result.ok).toBe(true);
       expect((result as any).output.pass).toBe(false);
       expect((result as any).output.reasons).toContain('planJson is not valid JSON');
+    });
+  });
+
+  describe('DriveAgent Integration', () => {
+    let tempDir: string;
+    let agent: DriveAgent;
+    let bus: ChimeraEventBus;
+    let toolRegistry: ToolRegistry;
+
+    beforeEach(async () => {
+      // Create a temporary directory for testing
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'drive-agent-test-'));
+      
+      bus = new ChimeraEventBus();
+      
+      // Create a minimal config for ToolRegistry
+      const mockConfig = {
+        getProjectRoot: () => tempDir,
+        getTargetDir: () => tempDir,
+        isInteractive: () => false,
+        getApprovalMode: () => 'auto',
+        setApprovalMode: () => {},
+        getGeminiClient: () => null,
+        getToolRegistry: async () => toolRegistry
+      } as unknown as Config;
+      
+      toolRegistry = new ToolRegistry(mockConfig);
+      
+      // Register the write_file tool
+      const writeFileTool = new WriteFileTool(mockConfig);
+      toolRegistry.registerTool(writeFileTool);
+      
+      agent = new DriveAgent(bus, toolRegistry);
+    });
+
+    afterEach(async () => {
+      // Clean up temporary directory
+      try {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('DriveAgent writes file to disk', async () => {
+      const testFileName = 'test-file.txt';
+      const testContent = 'Hello Chimera';
+      const testFilePath = path.join(tempDir, testFileName);
+      
+      // Use absolute path for the write command
+      const absolutePath = testFilePath;
+      
+      // Create a planJson with a write: command
+      const planJson = JSON.stringify({
+        task_id: 'test-write',
+        plan: [{
+          step_id: 'S1',
+          description: `write:${absolutePath}:${testContent}`
+        }],
+        status: 'pending'
+      });
+
+      const ctx = {
+        input: {
+          stepJson: {
+            stepId: 'S1',
+            description: `write:${absolutePath}:${testContent}`,
+            planJson: planJson
+          }
+        },
+        bus
+      };
+
+      // Execute the DriveAgent
+      const result = await agent.run(ctx);
+
+      // Assert the agent execution was successful
+      expect(result.ok).toBe(true);
+      expect(result.output).toBeDefined();
+      if (result.output) {
+        expect(result.output.artifacts).toContain(absolutePath);
+      }
+
+      // Assert the file was actually created (using absolute path for verification)
+      const fileExists = await fs.access(testFilePath).then(() => true).catch(() => false);
+      expect(fileExists).toBe(true);
+
+      // Assert the file contents are correct
+      const fileContents = await fs.readFile(testFilePath, 'utf-8');
+      expect(fileContents).toBe(testContent);
     });
   });
 });
