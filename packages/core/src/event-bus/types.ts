@@ -1,10 +1,13 @@
 export type ChimeraEventType = 'log' | 'progress' | 'agent-start' | 'agent-end' | 'error';
 
 export interface ChimeraEvent<T = unknown> {
-  ts: number;              // epoch ms
+  ts: number;
   type: ChimeraEventType;
   payload: T;
 }
+
+// Re-export AgentKind for consumers
+export { type AgentKind } from '../interfaces/agent.js';
 
 export interface ProgressPayload {
   stepId: string;          // e.g. "S1"
