@@ -23,7 +23,7 @@ const ControlPanel: React.FC = () => {
   const isDisabled = connectionStatus !== 'connected' || !ws || ws.readyState !== WebSocket.OPEN;
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-gray-800">Workflow Controls</h2>
         <div className="flex items-center gap-4">
@@ -32,7 +32,7 @@ const ControlPanel: React.FC = () => {
             disabled={isDisabled}
             className={`px-6 py-2 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${
               isDisabled
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                 : 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500'
             }`}
           >
@@ -43,7 +43,7 @@ const ControlPanel: React.FC = () => {
             disabled={isDisabled}
             className={`px-6 py-2 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${
               isDisabled
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                 : 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-500'
             }`}
           >

@@ -128,7 +128,7 @@ const EventTimeline: React.FC = () => {
   }, [filteredEvents, autoScroll, userScrolledUp]);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold text-gray-800">Event Timeline</h2>
         <div className="flex items-center gap-2">
@@ -137,7 +137,7 @@ const EventTimeline: React.FC = () => {
           }`}>
             {autoScroll ? 'Auto-scroll: ON' : 'Auto-scroll: PAUSED'}
           </span>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             {filteredEvents.length} / {events.length} events
           </span>
         </div>
@@ -145,10 +145,10 @@ const EventTimeline: React.FC = () => {
       
       <div 
         ref={containerRef}
-        className="h-96 overflow-y-auto border border-gray-200 rounded-md p-4 bg-gray-50"
+        className="h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-4 bg-gray-50 dark:bg-gray-800"
       >
         {filteredEvents.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
+          <div className="text-center text-gray-500 dark:text-gray-400 py-8">
             {events.length === 0 ? (
               <>
                 <p>No events in timeline yet...</p>
@@ -164,17 +164,17 @@ const EventTimeline: React.FC = () => {
         ) : (
           <div className="relative">
             {/* Vertical timeline line */}
-            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-300"></div>
+            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
             
             <div className="space-y-4">
               {filteredEvents.map((event, index) => (
                 <div key={index} className="relative flex items-start">
                   {/* Timeline dot */}
-                  <div className="absolute left-4 w-4 h-4 bg-white border-4 border-gray-300 rounded-full z-10"></div>
+                  <div className="absolute left-4 w-4 h-4 bg-white dark:bg-gray-700 border-4 border-gray-300 dark:border-gray-600 rounded-full z-10"></div>
                   
                   {/* Event content */}
                   <div className="ml-12 flex-1">
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
                           {/* Agent Avatar */}
@@ -185,7 +185,7 @@ const EventTimeline: React.FC = () => {
                               size="sm"
                             />
                           )}
-                          <span className="font-mono text-sm text-gray-500">
+                          <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
                             {formatTimestamp(event.ts)}
                           </span>
                           <span className={`px-2 py-1 rounded-md text-xs font-medium ${getEventTypeColor(event.type)}`}>

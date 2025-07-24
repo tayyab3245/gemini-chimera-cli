@@ -7,7 +7,7 @@ const parseMarkdown = (text: string): React.ReactElement => {
   let html = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   
   // Replace `code` with <code>
-  html = html.replace(/`(.*?)`/g, '<code class="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs">$1</code>');
+  html = html.replace(/`(.*?)`/g, '<code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-1 py-0.5 rounded text-xs">$1</code>');
   
   // Replace links [text](url) with <a>
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1</a>');
@@ -58,17 +58,17 @@ export const ChatPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white border-l border-gray-200">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gray-50 px-4 py-3 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Kernel Chat</h2>
-        <p className="text-sm text-gray-600">Converse with the Kernel in real-time</p>
+      <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700 rounded-t-lg">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Kernel Chat</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Converse with the Kernel in real-time</p>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4" data-testid="chat-messages">
         {chatMessages.length === 0 ? (
-          <div className="text-center text-gray-500 mt-8" data-testid="empty-state">
+          <div className="text-center text-gray-500 dark:text-gray-400 mt-8" data-testid="empty-state">
             <p>No messages yet.</p>
             <p className="text-sm">Start a conversation with the Kernel below.</p>
           </div>
@@ -83,7 +83,7 @@ export const ChatPanel: React.FC = () => {
                 className={`max-w-3xl rounded-lg px-4 py-2 ${
                   message.sender === 'user'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
@@ -91,7 +91,7 @@ export const ChatPanel: React.FC = () => {
                     {message.sender === 'user' ? 'You' : 'Kernel'}
                   </span>
                   <span className={`text-xs ${
-                    message.sender === 'user' ? 'text-blue-200' : 'text-gray-500'
+                    message.sender === 'user' ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'
                   }`}>
                     {formatTimestamp(message.timestamp)}
                   </span>
@@ -111,7 +111,7 @@ export const ChatPanel: React.FC = () => {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-gray-200 p-4">
+      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 rounded-b-lg">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             ref={inputRef}
@@ -120,20 +120,20 @@ export const ChatPanel: React.FC = () => {
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message to the Kernel..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
             data-testid="chat-input"
             maxLength={1000}
           />
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
             data-testid="send-button"
           >
             Send
           </button>
         </form>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
           Press Enter to send • Shift+Enter for new line • Last 50 messages saved
         </p>
       </div>

@@ -41,12 +41,12 @@ const TimelineFilterBar: React.FC = () => {
 
   const getAgentColor = (agent: string, isActive: boolean): string => {
     const colors = {
-      KERNEL: isActive ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500',
-      SYNTH: isActive ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500',
-      DRIVE: isActive ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500',
-      AUDIT: isActive ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500',
+      KERNEL: isActive ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+      SYNTH: isActive ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+      DRIVE: isActive ? 'bg-yellow-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+      AUDIT: isActive ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
     };
-    return colors[agent as keyof typeof colors] || 'bg-gray-200 text-gray-500';
+    return colors[agent as keyof typeof colors] || 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400';
   };
 
   const getEventTypeColor = (eventType: string, isActive: boolean): string => {
@@ -61,7 +61,7 @@ const TimelineFilterBar: React.FC = () => {
     const color = baseColors[eventType as keyof typeof baseColors] || 'gray';
     return isActive 
       ? `bg-${color}-500 text-white` 
-      : 'bg-gray-200 text-gray-500';
+      : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400';
   };
 
   const clearAllFilters = () => {
@@ -91,7 +91,7 @@ const TimelineFilterBar: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-800">Timeline Filters</h3>
         {hasActiveFilters() && (

@@ -1,0 +1,150 @@
+/* Global styles for Chimera Dashboard */
+
+/* Global theming for scrollbars */
+:root {
+  --scrollbar-width: 8px;
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+}
+
+.dark {
+  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #475569;
+  --scrollbar-thumb-hover: #64748b;
+}
+
+/* Custom scrollbars for webkit browsers */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Ensure smooth transitions for dark mode */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Global text selection styling */
+::selection {
+  background-color: #dbeafe; /* bg-blue-200 */
+  color: #1e3a8a; /* text-blue-900 */
+}
+
+.dark ::selection {
+  background-color: #1e40af; /* dark:bg-blue-800 */
+  color: #dbeafe; /* dark:text-blue-100 */
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid #3b82f6; /* outline-blue-500 */
+  outline-offset: 2px;
+}
+
+.dark :focus-visible {
+  outline-color: #60a5fa; /* dark:outline-blue-400 */
+}
+
+/* Smooth animations for all interactive elements */
+button, input, textarea, select {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Ensure proper contrast for form elements */
+input, textarea, select {
+  background-color: #ffffff; /* bg-white */
+  border-color: #d1d5db; /* border-gray-300 */
+  color: #111827; /* text-gray-900 */
+}
+
+.dark input, 
+.dark textarea, 
+.dark select {
+  background-color: #1f2937; /* dark:bg-gray-800 */
+  border-color: #4b5563; /* dark:border-gray-600 */
+  color: #f9fafb; /* dark:text-gray-100 */
+}
+
+/* Typography improvements */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600; /* font-semibold */
+  color: #111827; /* text-gray-900 */
+}
+
+.dark h1, 
+.dark h2, 
+.dark h3, 
+.dark h4, 
+.dark h5, 
+.dark h6 {
+  color: #ffffff; /* dark:text-white */
+}
+
+/* Professional shadows for elevated elements */
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.dark .card-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Ensure proper backdrop for modals/overlays */
+.backdrop {
+  background-color: rgba(0, 0, 0, 0.5); /* bg-black/50 */
+}
+
+.dark .backdrop {
+  background-color: rgba(0, 0, 0, 0.7); /* dark:bg-black/70 */
+}
+
+/* Global button styling improvements */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Improve code block styling */
+code, pre {
+  font-family: 'Fira Code', 'Courier New', monospace;
+}
+
+/* Better link styling */
+a {
+  color: #2563eb; /* text-blue-600 */
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #1d4ed8; /* hover:text-blue-700 */
+}
+
+.dark a {
+  color: #60a5fa; /* dark:text-blue-400 */
+}
+
+.dark a:hover {
+  color: #93c5fd; /* dark:hover:text-blue-300 */
+}

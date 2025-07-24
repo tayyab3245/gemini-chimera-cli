@@ -71,7 +71,7 @@ const ToastManager: React.FC = () => {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="bg-white border-l-4 border-red-500 rounded-lg shadow-lg p-4 min-w-80 max-sm:min-w-full flex items-start gap-3 transform transition-all duration-300 ease-in-out opacity-100 translate-x-0"
+          className="bg-white dark:bg-gray-800 border-l-4 border-red-500 dark:border-red-400 rounded-lg shadow-lg p-4 min-w-80 max-sm:min-w-full flex items-start gap-3 transform transition-all duration-300 ease-in-out opacity-100 translate-x-0"
         >
           {/* Error Icon */}
           <div className="flex-shrink-0">
@@ -102,7 +102,7 @@ const ToastManager: React.FC = () => {
           {/* Dismiss Button */}
           <button
             onClick={() => dismissToast(toast.id)}
-            className="flex-shrink-0 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600 transition-colors"
+            className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:text-gray-600 dark:focus:text-gray-300 transition-colors"
             aria-label="Dismiss error notification"
           >
             <svg 

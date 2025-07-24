@@ -58,7 +58,7 @@ const ProgressBar: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium text-gray-700">Workflow Progress</h3>
         <span className={`text-sm font-medium ${
@@ -68,7 +68,7 @@ const ProgressBar: React.FC = () => {
         </span>
       </div>
       
-      <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
+      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 overflow-hidden">
         {progressState.isIndeterminate ? (
           <div className="h-full bg-gradient-to-r from-blue-400 via-blue-500 to-blue-400 animate-pulse bg-[length:200%_100%] rounded"></div>
         ) : (

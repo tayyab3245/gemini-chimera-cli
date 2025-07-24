@@ -77,11 +77,11 @@ const AgentStatusBar: React.FC = () => {
 
   const getStatusColor = (state: AgentStatus['state']): string => {
     switch (state) {
-      case 'idle': return 'bg-gray-400';
+      case 'idle': return 'bg-gray-400 dark:bg-gray-600';
       case 'running': return 'bg-blue-500';
       case 'done': return 'bg-green-500';
       case 'error': return 'bg-red-500';
-      default: return 'bg-gray-400';
+      default: return 'bg-gray-400 dark:bg-gray-600';
     }
   };
 
@@ -117,7 +117,7 @@ const AgentStatusBar: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white border-b border-gray-200 px-4 py-3">
+    <div className="w-full bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
       <div className="flex justify-center space-x-6">
         {Object.entries(agentStatuses).map(([agentName, status]) => (
           <div
@@ -132,7 +132,7 @@ const AgentStatusBar: React.FC = () => {
             <span className="text-sm font-medium text-gray-700">
               {agentName}
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {getStatusText(status.state)}
             </span>
           </div>

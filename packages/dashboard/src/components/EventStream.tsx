@@ -40,10 +40,10 @@ const EventStream: React.FC<EventStreamProps> = ({
       case 'agent-end': return 'text-blue-800 bg-blue-100';
       case 'progress': return 'text-green-600 bg-green-50';
       case 'error': return 'text-red-600 bg-red-50';
-      case 'log': return 'text-gray-600 bg-gray-50';
+      case 'log': return 'text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700';
       case 'workflow-start': return 'text-purple-600 bg-purple-50';
       case 'workflow-complete': return 'text-purple-800 bg-purple-100';
-      default: return 'text-gray-600 bg-gray-50';
+      default: return 'text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700';
     }
   };
 
@@ -93,7 +93,7 @@ const EventStream: React.FC<EventStreamProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold text-gray-800">Live Event Stream</h2>
         <div className="flex items-center gap-4">
@@ -109,9 +109,9 @@ const EventStream: React.FC<EventStreamProps> = ({
         </div>
       </div>
       
-      <div className="h-96 overflow-y-auto border border-gray-200 rounded-md p-4 bg-gray-50">
+      <div className="h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-4 bg-gray-50 dark:bg-gray-800">
         {events.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
+          <div className="text-center text-gray-500 dark:text-gray-400 py-8">
             <p>No events yet. Waiting for WebSocket connection...</p>
             <p className="text-sm mt-2">Make sure the WebSocket gateway is running on ws://localhost:4000/events</p>
           </div>
@@ -122,7 +122,7 @@ const EventStream: React.FC<EventStreamProps> = ({
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="font-mono text-xs text-gray-500">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
                         {formatTimestamp(event.ts)}
                       </span>
                       <span className="font-semibold text-sm">
