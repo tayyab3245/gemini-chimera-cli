@@ -375,6 +375,44 @@ gemini
 
 **⚠️ Warning**: These examples are theoretical. Actual behavior is unknown and may result in failures, hangs, or unexpected results.
 
+## Running the Dashboard
+
+Project Chimera includes a live web dashboard for real-time monitoring of workflow events and agent progress.
+
+### Prerequisites
+- WebSocket gateway running on port 4000 (part of Chimera CLI)
+- Node.js version 18 or higher
+
+### Quick Start
+```bash
+# Navigate to dashboard package
+cd packages/dashboard
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+The dashboard will be available at **http://localhost:5173**
+
+### Features
+- **Live Event Streaming**: Real-time display of ChimeraEventBus events
+- **Agent Monitoring**: Track agent lifecycle (start/end), progress updates, and errors
+- **WebSocket Connection**: Connects to `ws://localhost:4000/events`
+- **Auto-Reconnection**: Automatically reconnects if connection is lost
+- **Event Filtering**: Color-coded event types for easy identification
+
+### Event Types Displayed
+- **Agent Events**: agent-start, agent-end (blue)
+- **Progress Events**: progress with percentages (green)  
+- **Error Events**: error messages and failures (red)
+- **Workflow Events**: workflow-start, workflow-complete (purple)
+- **Log Events**: general log messages (gray)
+
+The dashboard requires the Chimera CLI WebSocket gateway to be running. Make sure to start the gateway before opening the dashboard for live event streaming.
+
 ## Known Limitations & Experimental Status
 
 ### **CRITICAL EXPERIMENTAL LIMITATIONS**
