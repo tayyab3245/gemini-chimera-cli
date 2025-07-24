@@ -3,10 +3,12 @@ import { AgentKind } from '../interfaces/agent.js';
 import { WorkflowState } from '../interfaces/workflow.js';
 import { buildContextSlice, BaseContext } from '../context/broker.js';
 import { WorkflowStateMachine } from './workflow.js';
+import { withTimeout, withRetries } from './recovery.js';
 import { KernelAgent } from '../agents/kernel.js';
 import { SynthAgent } from '../agents/synth.js';
 import { DriveAgent } from '../agents/drive.js';
 import { AuditAgent } from '../agents/audit.js';
+import type { AgentContext } from '../agents/agent.js';
 
 export class WorkflowEngine {
   private stateMachine: WorkflowStateMachine;
@@ -39,18 +41,32 @@ export class WorkflowEngine {
       artifacts: []
     };
 
-    // ③ call Kernel → Synth → Drive → Audit in sequence
-    await this.runAgent('KERNEL', fullContext);
-    await this.runAgent('SYNTH', fullContext);
-    await this.runAgent('DRIVE', fullContext);
-    await this.runAgent('AUDIT', fullContext);
+    try {
+      // ③ call Kernel → Synth → Drive → Audit in sequence with retries and timeouts
+      await this.runAgent('KERNEL', fullContext);
+      await this.runAgent('SYNTH', fullContext);
+      await this.runAgent('DRIVE', fullContext);
+      await this.runAgent('AUDIT', fullContext);
 
-    // ④ publish workflow-complete
-    this.bus.publish({
-      ts: Date.now(),
-      type: 'log',
-      payload: 'workflow-complete'
-    });
+      // ④ publish workflow-complete
+      this.bus.publish({
+        ts: Date.now(),
+        type: 'log',
+        payload: 'workflow-complete'
+      });
+    } catch (error) {
+      // Publish error event and re-throw to abort workflow
+      this.bus.publish({
+        ts: Date.now(),
+        type: 'error',
+        payload: {
+          agent: 'WORKFLOW',
+          message: error instanceof Error ? error.message : 'Unknown workflow error',
+          stack: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      throw error;
+    }
   }
 
   private async runAgent(agentKind: AgentKind, fullContext: BaseContext): Promise<void> {
@@ -64,9 +80,25 @@ export class WorkflowEngine {
     // Advance state machine
     this.stateMachine.advance();
 
-    // Run agent with dummy results for now (skip actual agent.run calls)
-    // This is a skeleton implementation - real logic will be added in future tickets
-    const dummyResult = { ok: true };
+    try {
+      // Execute agent with retry and timeout logic
+      await withRetries(
+        () => withTimeout(this.executeAgent(agentKind, fullContext), 60_000),
+        3
+      );
+    } catch (error) {
+      // Publish error event on final failure
+      this.bus.publish({
+        ts: Date.now(),
+        type: 'error',
+        payload: {
+          agent: agentKind,
+          message: error instanceof Error ? error.message : 'Unknown agent error',
+          stack: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      throw error; // Re-throw to abort workflow
+    }
 
     // Emit agent-end event
     this.bus.publish({
@@ -74,6 +106,42 @@ export class WorkflowEngine {
       type: 'log',
       payload: `agent-end-${agentKind}`
     });
+  }
+
+  private async executeAgent(agentKind: AgentKind, fullContext: BaseContext): Promise<void> {
+    // Build context slice for the specific agent
+    const contextSlice = buildContextSlice(agentKind, fullContext);
+    const agentContext: AgentContext<any> = {
+      input: contextSlice,
+      bus: this.bus
+    };
+
+    // Execute the appropriate agent
+    let result;
+    switch (agentKind) {
+      case 'KERNEL':
+        result = await this.kernel.run(agentContext);
+        break;
+      case 'SYNTH':
+        result = await this.synth.run(agentContext);
+        break;
+      case 'DRIVE':
+        result = await this.drive.run(agentContext);
+        break;
+      case 'AUDIT':
+        result = await this.audit.run(agentContext);
+        break;
+      default:
+        throw new Error(`Unknown agent kind: ${agentKind}`);
+    }
+
+    // Check if the agent execution was successful
+    if (!result.ok) {
+      throw new Error(result.error || `Agent ${agentKind} execution failed`);
+    }
+
+    // Update fullContext with any outputs (for future implementation)
+    // This is where we would merge agent outputs back into the full context
   }
 }
 
