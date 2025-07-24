@@ -40,8 +40,12 @@ async function runSmokeTest() {
   console.log('✓ Kernel completed');
 
   // Synth phase
-  const synthContext: AgentContext<{ userInput: string; needToKnow: string }> = {
-    input: { userInput: "echo 'hi'", needToKnow: "minimal context" },
+  const synthContext: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+    input: { 
+      clarifiedUserInput: "echo 'hi'", 
+      assumptions: ["Shell command execution"], 
+      constraints: ["Simple echo command"] 
+    },
     bus
   };
   const synthResult = await synth.run(synthContext);
