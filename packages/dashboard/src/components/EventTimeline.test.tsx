@@ -94,7 +94,7 @@ describe('EventTimeline', () => {
 
       expect(screen.getByText('Event Timeline')).toBeInTheDocument();
       expect(screen.getByText('Auto-scroll: ON')).toBeInTheDocument();
-      expect(screen.getByText('0 events')).toBeInTheDocument();
+      expect(screen.getByText('0 / 0 events')).toBeInTheDocument();
     });
 
     it('shows empty state when no events', () => {
@@ -127,7 +127,7 @@ describe('EventTimeline', () => {
         expect(screen.getByText('agent-start')).toBeInTheDocument();
         expect(screen.getByText('TestAgent')).toBeInTheDocument();
         expect(screen.getByText('Agent started: TestAgent')).toBeInTheDocument();
-        expect(screen.getByText('1 events')).toBeInTheDocument();
+        expect(screen.getByText('1 / 1 events')).toBeInTheDocument();
       });
     });
   });
@@ -293,7 +293,7 @@ describe('EventTimeline', () => {
       );
 
       // Initially no events
-      expect(screen.getByText('0 events')).toBeInTheDocument();
+      expect(screen.getByText('0 / 0 events')).toBeInTheDocument();
 
       // Add first event
       mockWs.simulateMessage({
@@ -303,7 +303,7 @@ describe('EventTimeline', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('1 events')).toBeInTheDocument();
+        expect(screen.getByText('1 / 1 events')).toBeInTheDocument();
         expect(screen.getByText('Agent started: Agent1')).toBeInTheDocument();
       });
 
@@ -315,7 +315,7 @@ describe('EventTimeline', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('2 events')).toBeInTheDocument();
+        expect(screen.getByText('2 / 2 events')).toBeInTheDocument();
         expect(screen.getByText('Agent completed: Agent1')).toBeInTheDocument();
       });
     });
@@ -351,7 +351,7 @@ describe('EventTimeline', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('3 events')).toBeInTheDocument();
+        expect(screen.getByText('3 / 3 events')).toBeInTheDocument();
         
         // Verify all three event types are present
         expect(screen.getByText('Agent started: Agent1')).toBeInTheDocument();
@@ -469,7 +469,7 @@ describe('EventTimeline', () => {
       }
 
       await waitFor(() => {
-        expect(screen.getByText('7 events')).toBeInTheDocument();
+        expect(screen.getByText('7 / 7 events')).toBeInTheDocument();
         
         // Verify that badges have different color classes
         const badges = screen.getAllByText(/agent-start|agent-end|progress|error|log|workflow-start|workflow-complete/);

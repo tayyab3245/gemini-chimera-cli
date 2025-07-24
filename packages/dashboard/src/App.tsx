@@ -5,6 +5,7 @@ import EventTimeline from './components/EventTimeline';
 import ProgressBar from './components/ProgressBar';
 import ToastManager from './components/ToastManager';
 import AgentStatusBar from './components/AgentStatusBar';
+import TimelineFilterBar from './components/TimelineFilterBar';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { EventProvider } from './contexts/EventContext';
 
@@ -30,6 +31,7 @@ function App() {
               <AgentStatusBar />
               <ProgressBar />
               <ControlPanel />
+              <TimelineFilterBar />
               <EventTimeline />
               <EventStream 
                 ws={ws}

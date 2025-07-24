@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEvents, ChimeraEvent } from '../contexts/EventContext';
 
 const EventTimeline: React.FC = () => {
-  const { events } = useEvents();
+  const { events, filteredEvents } = useEvents();
   const timelineEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -100,7 +100,7 @@ const EventTimeline: React.FC = () => {
     if (autoScroll && !userScrolledUp) {
       timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [events, autoScroll, userScrolledUp]);
+  }, [filteredEvents, autoScroll, userScrolledUp]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
@@ -113,7 +113,7 @@ const EventTimeline: React.FC = () => {
             {autoScroll ? 'Auto-scroll: ON' : 'Auto-scroll: PAUSED'}
           </span>
           <span className="text-sm text-gray-500">
-            {events.length} events
+            {filteredEvents.length} / {events.length} events
           </span>
         </div>
       </div>
@@ -122,10 +122,19 @@ const EventTimeline: React.FC = () => {
         ref={containerRef}
         className="h-96 overflow-y-auto border border-gray-200 rounded-md p-4 bg-gray-50"
       >
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
-            <p>No events in timeline yet...</p>
-            <p className="text-sm mt-2">Events will appear here as they are received</p>
+            {events.length === 0 ? (
+              <>
+                <p>No events in timeline yet...</p>
+                <p className="text-sm mt-2">Events will appear here as they are received</p>
+              </>
+            ) : (
+              <>
+                <p>No events match the current filters</p>
+                <p className="text-sm mt-2">Try adjusting your search or filter settings</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="relative">
@@ -133,7 +142,7 @@ const EventTimeline: React.FC = () => {
             <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-300"></div>
             
             <div className="space-y-4">
-              {events.map((event, index) => (
+              {filteredEvents.map((event, index) => (
                 <div key={index} className="relative flex items-start">
                   {/* Timeline dot */}
                   <div className="absolute left-4 w-4 h-4 bg-white border-4 border-gray-300 rounded-full z-10"></div>
