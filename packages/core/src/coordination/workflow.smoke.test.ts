@@ -77,7 +77,7 @@ describe('Workflow Smoke Tests', () => {
 
       expect(result.ok).toBe(true);
       expect((result as any).output.pass).toBe(false);
-      expect((result as any).output.reasons).toContain('planJson is not valid JSON');
+      expect((result as any).output.recommendation).toContain('planJson is not valid JSON');
     });
   });
 
