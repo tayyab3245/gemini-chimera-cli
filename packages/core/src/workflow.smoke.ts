@@ -54,8 +54,19 @@ async function runSmokeTest() {
   console.log('✓ Synth completed');
 
   // Drive phase
-  const driveContext: AgentContext<{ stepJson: any }> = {
-    input: { stepJson: { stepId: "step_1", planJson: synthResult.output!.planJson } },
+  const driveContext: AgentContext<{ planStep: any; artifacts: string[] }> = {
+    input: { 
+      planStep: {
+        step_id: "step_1",
+        description: "echo 'hi'",
+        depends_on: [],
+        status: 'pending',
+        artifacts: [],
+        attempts: 0,
+        max_attempts: 3
+      },
+      artifacts: []
+    },
     bus
   };
   const driveResult = await drive.run(driveContext);

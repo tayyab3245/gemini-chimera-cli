@@ -1,7 +1,30 @@
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { AgentContext, AgentResult } from './agent.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
+import type { PlanStep } from '../interfaces/chimera.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+
+export interface DriveInput {
+  planStep: PlanStep;
+  artifacts: string[];
+}
+
+export interface DriveOutput {
+  artifacts: string[];
+}
+
+export interface ExecutedStep {
+  stepId: string;
+  success: boolean;
+  artifacts: string[];
+  error?: string;
+}
 
 export class DriveAgent {
   readonly id = AgentType.DRIVE;
@@ -12,106 +35,106 @@ export class DriveAgent {
   ) {}
 
   async run(
-    ctx: AgentContext<{ stepJson: any }>
-  ): Promise<AgentResult<{ artifacts: string[] }>> {
+    ctx: AgentContext<DriveInput>
+  ): Promise<AgentResult<DriveOutput>> {
     this.bus.publish({ ts: Date.now(), type: 'agent-start', payload: { id: this.id } });
 
-    // Error path
-    if (!ctx.input.stepJson) {
+    try {
+      // Progress: 0% - Starting execution
+      this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 0 } });
+
+      const { planStep, artifacts: inputArtifacts } = ctx.input;
+      const description = planStep.description;
+
+      // Check if this is a write:<filePath>:<content> pattern
+      if (this.isWriteCommand(description)) {
+        const result = await this.executeWriteCommand(description);
+        
+        // Progress: 100% - Execution complete
+        this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
+        
+        this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
+        return { ok: true, output: { artifacts: result.artifacts } };
+      }
+
+      // For non-write commands, return empty artifacts (not implemented)
+      this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
       this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-      return { ok: false, error: 'No step provided' } as any;
-    }
+      return { ok: true, output: { artifacts: [] } };
 
-    // Parse step_id with default fallback
-    const stepId = ctx.input.stepJson.step_id || ctx.input.stepJson.stepId || "UNKNOWN";
+    } catch (error) {
+      this.bus.publish({
+        ts: Date.now(),
+        type: 'error',
+        payload: {
+          agent: 'DRIVE',
+          message: error instanceof Error ? error.message : 'Unknown execution error',
+          details: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
+      return { ok: false, error: `Drive execution failed: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  private isWriteCommand(description: string): boolean {
+    return description.startsWith('write:') && description.includes(':');
+  }
+
+  private async executeWriteCommand(description: string): Promise<{ artifacts: string[] }> {
+    // Parse write:<filePath>:<content> pattern
+    const writePrefix = 'write:';
+    const afterWrite = description.substring(writePrefix.length);
     
-    // Try to extract description from the step or from planJson
-    let description = ctx.input.stepJson.description || "";
+    let filePath: string;
+    let content: string;
     
-    // If no direct description, try to parse from planJson if available
-    if (!description && ctx.input.stepJson.planJson) {
-      try {
-        const plan = JSON.parse(ctx.input.stepJson.planJson);
-        if (plan.plan && Array.isArray(plan.plan) && plan.plan.length > 0) {
-          // For now, use the first step's description
-          description = plan.plan[0].description || "";
-        }
-      } catch (error) {
-        // If planJson parsing fails, continue with empty description
+    // Check if this looks like a Windows path (starts with drive letter like C:)
+    const windowsPathMatch = afterWrite.match(/^([a-zA-Z]:\\[^:]*?):(.*)/);
+    if (windowsPathMatch) {
+      // Windows path: C:\path\file.txt:content
+      filePath = windowsPathMatch[1];
+      content = windowsPathMatch[2];
+    } else {
+      // Unix-style path or simple filename: find first colon to separate path from content
+      const firstColonIndex = afterWrite.indexOf(':');
+      if (firstColonIndex === -1) {
+        throw new Error('Invalid write command format. Expected: write:<filePath>:<content>');
       }
+      filePath = afterWrite.substring(0, firstColonIndex);
+      content = afterWrite.substring(firstColonIndex + 1);
     }
 
-    // Check if this is a write: command and we have a tool registry
-    if (description.startsWith('write:') && this.toolRegistry) {
-      try {
-        // Publish progress event
-        this.bus.publish({ 
-          ts: Date.now(), 
-          type: 'progress', 
-          payload: `Processing write command: ${description}` 
-        });
-
-        // Parse the write command: write:<filePath>:<content>
-        // To handle Windows paths with drive letters (e.g., C:\path), we need to be careful with splitting
-        const writePrefix = 'write:';
-        if (!description.startsWith(writePrefix)) {
-          this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-          return { ok: false, error: 'Invalid write command format. Expected: write:<filePath>:<content>' } as any;
-        }
-        
-        const afterWrite = description.substring(writePrefix.length);
-        
-        // Find the last colon to separate content from path
-        const lastColonIndex = afterWrite.lastIndexOf(':');
-        if (lastColonIndex === -1) {
-          this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-          return { ok: false, error: 'Invalid write command format. Expected: write:<filePath>:<content>' } as any;
-        }
-        
-        const filePath = afterWrite.substring(0, lastColonIndex);
-        const content = afterWrite.substring(lastColonIndex + 1);
-
-        // Get the write_file tool from the registry
-        const writeFileTool = this.toolRegistry.getTool('write_file');
-        if (!writeFileTool) {
-          this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-          return { ok: false, error: 'write_file tool not found in registry' } as any;
-        }
-
-        // Execute the write_file tool
-        const toolParams = {
-          file_path: filePath,
-          content: content
-        };
-
-        const abortController = new AbortController();
-        const toolResult = await writeFileTool.execute(toolParams, abortController.signal);
-
-        // Check if the tool execution was successful
-        if (!toolResult || typeof toolResult !== 'object') {
-          this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-          return { ok: false, error: 'Tool execution returned invalid result' } as any;
-        }
-
-        // Publish agent-end event
-        this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-
-        // Return the path of the written file as an artifact
-        return { ok: true, output: { artifacts: [filePath] } };
-
-      } catch (error) {
-        this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-        return { 
-          ok: false, 
-          error: `Failed to execute write command: ${error instanceof Error ? error.message : String(error)}` 
-        } as any;
-      }
+    if (!filePath) {
+      throw new Error('File path cannot be empty in write command');
     }
 
-    // Fallback to original behavior for non-write commands or when no tool registry
-    const artifact = `Executed ${stepId} (stub)`;
+    // Check if tool registry is available
+    if (!this.toolRegistry) {
+      throw new Error('Tool registry not available for write_file execution');
+    }
 
-    this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-    return { ok: true, output: { artifacts: [artifact] } };
+    // Get the write_file tool from the registry
+    const writeFileTool = this.toolRegistry.getTool('write_file');
+    if (!writeFileTool) {
+      throw new Error('write_file tool not found in registry');
+    }
+
+    // Execute the write_file tool
+    const toolParams = {
+      file_path: filePath,
+      content: content
+    };
+
+    const abortController = new AbortController();
+    const toolResult = await writeFileTool.execute(toolParams, abortController.signal);
+
+    // Validate tool execution result
+    if (!toolResult || typeof toolResult !== 'object') {
+      throw new Error('Tool execution returned invalid result');
+    }
+
+    // Return the file path as an artifact
+    return { artifacts: [filePath] };
   }
 }

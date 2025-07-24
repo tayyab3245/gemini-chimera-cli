@@ -9,6 +9,7 @@ import { ProgressPayload, ErrorPayload } from '../event-bus/types.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { Config } from '../config/config.js';
+import type { PlanStatus } from '../interfaces/chimera.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -141,11 +142,16 @@ describe('Workflow Smoke Tests', () => {
 
       const ctx = {
         input: {
-          stepJson: {
-            stepId: 'S1',
+          planStep: {
+            step_id: 'S1',
             description: `write:${absolutePath}:${testContent}`,
-            planJson: planJson
-          }
+            depends_on: [],
+            status: 'pending' as PlanStatus,
+            artifacts: [],
+            attempts: 0,
+            max_attempts: 3
+          },
+          artifacts: []
         },
         bus
       };
