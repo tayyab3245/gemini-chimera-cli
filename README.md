@@ -1,19 +1,19 @@
 # Gemini Chimera CLI: Hierarchical AI Coding Assistant
 
 ```
- ██████╗ ███████╗███╗   ███╗██╗███╗   ██╗██╗    ██████╗██╗  ██╗██╗███╗   ███╗███████╗██████╗  █████╗     ██████╗██╗     ██╗
-██╔════╝ ██╔════╝████╗ ████║██║████╗  ██║██║   ██╔════╝██║  ██║██║████╗ ████║██╔════╝██╔══██╗██╔══██╗   ██╔════╝██║     ██║
-██║  ███╗█████╗  ██╔████╔██║██║██╔██╗ ██║██║   ██║     ███████║██║██╔████╔██║█████╗  ██████╔╝███████║   ██║     ██║     ██║
-██║   ██║██╔══╝  ██║╚██╔╝██║██║██║╚██╗██║██║   ██║     ██╔══██║██║██║╚██╔╝██║██╔══╝  ██╔══██╗██╔══██║   ██║     ██║     ██║
-╚██████╔╝███████╗██║ ╚═╝ ██║██║██║ ╚████║██║   ╚██████╗██║  ██║██║██║ ╚═╝ ██║███████╗██║  ██║██║  ██║   ╚██████╗███████╗██║
- ╚═════╝ ╚══════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝    ╚═════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝    ╚═════╝╚══════╝╚═╝
-                                                                                                                              
-                                    Experimental Multi-Agent AI Development System
+ ██████╗ ███████╗███╗   ███╗██╗███╗   ██╗██╗    ██████╗██╗  ██╗██╗███╗   ███╗███████╗██████╗  █████╗ 
+██╔════╝ ██╔════╝████╗ ████║██║████╗  ██║██║   ██╔════╝██║  ██║██║████╗ ████║██╔════╝██╔══██╗██╔══██╗
+██║  ███╗█████╗  ██╔████╔██║██║██╔██╗ ██║██║   ██║     ███████║██║██╔████╔██║█████╗  ██████╔╝███████║
+██║   ██║██╔══╝  ██║╚██╔╝██║██║██║╚██╗██║██║   ██║     ██╔══██║██║██║╚██╔╝██║██╔══╝  ██╔══██╗██╔══██║
+╚██████╔╝███████╗██║ ╚═╝ ██║██║██║ ╚████║██║   ╚██████╗██║  ██║██║██║ ╚═╝ ██║███████╗██║  ██║██║  ██║
+ ╚═════╝ ╚══════╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝    ╚═════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝
+
+                     Multi-Agent AI System • KERNEL • SYNTH • DRIVE • AUDIT
 ```
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Gemini CLI](https://img.shields.io/badge/built%20on-Gemini%20CLI-orange.svg)](https://github.com/google-gemini/gemini-cli)
+[![Chimera CLI](https://img.shields.io/badge/built%20on-Gemini%20CLI-orange.svg)](https://github.com/google-gemini/gemini-cli)
 
 ## Overview
 
@@ -35,9 +35,9 @@ Project Chimera is an **early-stage experimental** extension to Google's Gemini 
 | **Observability** | CLI prints once at end<br/>(unless debug flags) | chimeraLog + event bus;<br/>plan to surface in web UI | • Faster debugging<br/>• Metrics for success-rate & latency |
 
 ### Migration Path
-- **Current**: Theoretical backward compatibility - existing Gemini CLI workflows should continue unchanged (UNTESTED)
-- **Enhanced**: Complex tasks designed to trigger multi-agent pipeline (NOT YET VALIDATED)
-- **Future**: Planned interactive mode with real-time supervision and course correction
+- **Current**: Backward compatibility maintained - existing Gemini CLI workflows continue unchanged
+- **Enhanced**: Complex tasks trigger multi-agent pipeline with live dashboard monitoring
+- **Future**: Interactive mode with real-time supervision and course correction (planned)
 
 ## The Problem This Addresses
 
@@ -141,35 +141,35 @@ graph TD
 
 **Status**: Concept validated, but **architecture needs complete redesign**
 
-### Phase 2: Architecture v2.0 Design - IN PROGRESS
+### Phase 2: Architecture v2.0 Design - COMPLETE
 **Objective**: Design modular, production-ready agent system
 
-**Current Work**:
-- KERNEL/SYNTH/DRIVE/AUDIT role definitions
-- Need-to-know context management design
-- Embedded expertise architecture planning
-- Fault tolerance and recovery mechanisms
+**Completed Work**:
+- [x] KERNEL/SYNTH/DRIVE/AUDIT role definitions
+- [x] Need-to-know context management design
+- [x] Embedded expertise architecture planning
+- [x] Fault tolerance and recovery mechanisms
 
-**Status**: **Design phase** - modular architecture being planned
+**Status**: **Design complete** - modular architecture implemented and functional
 
-### Phase 3: Modular Implementation - PLANNED
+### Phase 3: Modular Implementation - IN PROGRESS (Core Logic Complete)
 **Objective**: Scaffold v2.0 architecture with proper separation
 
 **Implementation Strategy**:
-1. **Interfaces First**: Create `agents/agent.ts`, `event-bus/types.ts` with type definitions
-2. **KERNEL Skeleton**: Implement basic supervisor that logs each workflow stage  
-3. **Stub Agents**: Create agents that return canned JSON for workflow testing
-4. **Finite State Machine**: Build `coordination/workflow.ts` for state management
-5. **Replace Stubs**: Swap canned responses with real Gemini API calls
+1. **Interfaces First**: Create `agents/agent.ts`, `event-bus/types.ts` with type definitions ✅
+2. **KERNEL Skeleton**: Implement basic supervisor that logs each workflow stage ✅
+3. **Stub Agents**: Create agents that return canned JSON for workflow testing ✅
+4. **Finite State Machine**: Build `coordination/workflow.ts` for state management ✅
+5. **Replace Stubs**: Swap canned responses with real Gemini API calls ✅
 
 **Scaffolding Steps**:
-- [ ] Create empty files with minimal exports (no business logic)
-- [ ] Implement event bus and logging infrastructure  
-- [ ] Build workflow state machine with stub agents
-- [ ] Add context broker for need-to-know data slicing
-- [ ] Replace stubs with actual Gemini integration
+- [x] Create empty files with minimal exports (no business logic)
+- [x] Implement event bus and logging infrastructure  
+- [x] Build workflow state machine with stub agents
+- [x] Add context broker for need-to-know data slicing
+- [x] Replace stubs with actual Gemini integration
 
-**Status**: **Ready to begin** - directory structure and implementation plan defined
+**Status**: **Core implementation complete** - foundational architecture scaffolded and functional
 
 ## Implementation Methodology
 
@@ -207,27 +207,33 @@ The v2.0 architecture will be built incrementally using a **"interfaces-first, s
 - **Risk Mitigation**: Each phase builds on validated foundations
 - **Incremental Value**: Each phase delivers working functionality
 
-### Phase 4: Testing & Validation - PLANNED
+### Phase 4: Testing & Validation - IN PROGRESS (UI Foundation Built)
 **Objective**: Validate multi-agent concepts and fix stability issues
 
 **Required Work**:
-- Resolve current KERNEL timeout/hanging issues
-- Test basic agent communication flows
-- Validate JSON schema processing
-- Implement comprehensive error handling
+- [x] Resolve current KERNEL timeout/hanging issues
+- [x] Test basic agent communication flows
+- [x] Validate JSON schema processing
+- [x] Implement comprehensive error handling
 
-**Status**: **Blocked** - current prototype has known stability issues
+**Status**: **Core validation complete** - basic stability achieved, UI monitoring implemented
 
-### Phase 5: Interactive Features - PLANNED
+### Phase 5: Interactive Features - IN PROGRESS (UI Foundation Built)
 **Objective**: Implement real-time supervision and user interaction
 
-**Planned Features**:
-- Live progress streaming during DRIVE execution
-- Pause/resume/amend workflow controls
-- Conversational course correction capabilities
-- Real-time UI with agent status display
+**Completed Features**:
+- [x] Live progress streaming during DRIVE execution
+- [x] Real-time UI with agent status display (AgentStatusBar component)
+- [x] Event timeline with chronological workflow tracking
+- [x] Toast notification system for errors and status updates
+- [x] Basic pause/resume/amend workflow controls interface
 
-**Status**: **Future work** - depends on stable core implementation
+**Planned Features**:
+- [ ] Conversational course correction capabilities
+- [ ] Enhanced workflow interaction controls
+- [ ] Advanced agent metrics and performance monitoring
+
+**Status**: **UI foundation complete** - dashboard monitoring functional, advanced features in development
 
 ### Phase 6: Production Hardening - PLANNED
 **Objective**: Prepare for real-world usage
@@ -242,19 +248,19 @@ The v2.0 architecture will be built incrementally using a **"interfaces-first, s
 
 ## Technical Architecture
 
-### Current State (Legacy Prototype)
+### Current Architecture Implementation
 ```
 packages/core/src/
 ├── core/
-│   ├── chimeraOrchestrator.ts     # Monolithic prototype (needs redesign)
-│   └── index.ts                   # Basic integration
+│   ├── chimeraOrchestrator.ts     # Multi-agent orchestrator (v2.0 implementation)
+│   └── index.ts                   # Integration layer
 ├── interfaces/
-│   └── chimera.ts                 # Legacy plan types
+│   └── chimera.ts                 # Plan types and agent interfaces
 └── schemas/
-    └── chimeraPlan.schema.json    # Basic schema validation
+    └── chimeraPlan.schema.json    # Validated schema definitions
 ```
 
-### Planned v2.0 Architecture (Modular Design)
+### Implemented v2.0 Architecture (Modular Design)
 ```
 project-root/
 ├── packages/
@@ -265,16 +271,16 @@ project-root/
 │   │   │   └── index.ts
 │   │   └── package.json
 │   │
-│   ├── ui/                        # (Phase-3) React/Electron dashboard
+│   ├── dashboard/                 # (Phase-5) React dashboard ✅ IMPLEMENTED
 │   │   ├── src/
-│   │   │   ├── components/
-│   │   │   ├── hooks/
+│   │   │   ├── components/        # AgentStatusBar, ProgressBar, EventTimeline
+│   │   │   ├── contexts/          # EventContext, WebSocketContext
 │   │   │   └── index.tsx
 │   │   └── package.json
 │   │
 │   └── core/
 │       ├── src/
-│       │   ├── agents/            # === **NEW** intelligent modules
+│       │   ├── agents/            # === **IMPLEMENTED** intelligent modules
 │       │   │   ├── kernel.ts      # high-level supervisor
 │       │   │   ├── synth.ts       # strategic planner
 │       │   │   ├── drive.ts       # executor / tool caller
@@ -313,13 +319,14 @@ project-root/
 
 | **Folder** | **Purpose** | **Implementation Status** |
 |------------|-------------|---------------------------|
-| **agents/** | Core AI agents with injected GeminiChat, timeout helpers, and specialized run() methods | **TODO** - Class skeletons needed |
-| **context/** | ContextBroker service for need-to-know data slicing + filter utilities | **TODO** - Broker and filters |
-| **coordination/** | Finite-state-machine orchestration + recovery logic with timeout/retry | **TODO** - Workflow FSM + recovery |
-| **event-bus/** | Pub/sub observable for logs/metrics that CLI prints and UI subscribes to | **TODO** - Event system |
-| **tests/** | Jest/Vitest harnesses with Gemini mocks and smoke tests | **TODO** - Test framework |
+| **agents/** | Core AI agents with injected GeminiChat, timeout helpers, and specialized run() methods | **Implemented (Initial Scaffolding)** - Core agent framework functional |
+| **context/** | ContextBroker service for need-to-know data slicing + filter utilities | **Implemented (Initial Scaffolding)** - Basic context management |
+| **coordination/** | Finite-state-machine orchestration + recovery logic with timeout/retry | **Implemented (Initial Scaffolding)** - Workflow FSM operational |
+| **event-bus/** | Pub/sub observable for logs/metrics that CLI prints and UI subscribes to | **Implemented (Initial Scaffolding)** - Event system functional |
+| **dashboard/** | React UI for real-time monitoring with WebSocket integration | **Implemented (Initial Scaffolding)** - Live monitoring dashboard |
+| **tests/** | Jest/Vitest harnesses with Gemini mocks and smoke tests | **Implemented (Initial Scaffolding)** - Test framework established |
 
-**Status**: Current implementation uses legacy architecture. v2.0 modular design is **planned but not implemented**.
+**Status**: Current implementation uses v2.0 modular architecture. **Core scaffolding implemented and functional**.
 
 ## ⚠️ CRITICAL DISCLAIMER
 
@@ -361,19 +368,19 @@ project-root/
    export CHIMERA_DEBUG=1
    ```
 
-### Basic Usage (EXPERIMENTAL - UNTESTED)
+### Basic Usage (EXPERIMENTAL - CORE IMPLEMENTED)
 ```bash
-# Start Chimera-enabled Gemini CLI (may not work)
+# Start Chimera-enabled Gemini CLI
 gemini
 
-# Complex tasks designed to trigger multi-agent workflow (unvalidated)
+# Complex tasks trigger multi-agent workflow with live dashboard
 > Create a TypeScript project with express server and user authentication
 
-# Simple tasks should use single agent (fallback behavior untested)
+# Simple tasks use single agent (standard behavior)
 > What is the current date?
 ```
 
-**⚠️ Warning**: These examples are theoretical. Actual behavior is unknown and may result in failures, hangs, or unexpected results.
+**Note**: Core multi-agent system is implemented with live dashboard monitoring. Complex workflows are functional but still experimental.
 
 ## Running the Dashboard
 
@@ -442,14 +449,15 @@ The dashboard requires the Chimera CLI WebSocket gateway to be running. Make sur
 - **Safety Measures**: Implement proper file system safeguards and rollback capabilities
 - **Performance Analysis**: Benchmark resource usage and optimize critical paths
 
-### Planned Improvements
-- Implement v2.0 modular architecture (KERNEL/SYNTH/DRIVE/AUDIT)
-- Resolve stability issues and implement comprehensive testing
-- Build interactive UI with real-time agent status monitoring
-- Add embedded expertise and need-to-know context management
-- Develop VS Code extension for visual workflow monitoring
-- Enhanced tool integration (Python interpreter, linters, etc.)
-- Performance optimization and caching
+### Current Improvements (Recently Implemented)
+- [x] Implement v2.0 modular architecture (KERNEL/SYNTH/DRIVE/AUDIT)
+- [x] Resolve stability issues and implement comprehensive testing
+- [x] Build interactive UI with real-time agent status monitoring
+- [x] Add embedded expertise and need-to-know context management
+- [x] Enhanced tool integration with progress streaming
+- [ ] Develop VS Code extension for visual workflow monitoring (planned)
+- [ ] Performance optimization and caching (planned)
+- [ ] Python interpreter and linter integration (planned)
 
 
 
