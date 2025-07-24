@@ -1,10 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-
-interface ChimeraEvent {
-  ts: number;
-  type: string;
-  payload: any;
-}
+import React, { useEffect, useRef } from 'react';
+import { useEvents, ChimeraEvent } from '../contexts/EventContext';
 
 interface EventStreamProps {
   ws: WebSocket | null;
@@ -19,7 +14,7 @@ const EventStream: React.FC<EventStreamProps> = ({
   onWebSocketChange, 
   onConnectionStatusChange 
 }) => {
-  const [events, setEvents] = useState<ChimeraEvent[]>([]);
+  const { events, clearEvents } = useEvents();
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -63,15 +58,6 @@ const EventStream: React.FC<EventStreamProps> = ({
         onConnectionStatusChange('connected');
       };
 
-      newWs.onmessage = (event) => {
-        try {
-          const eventData: ChimeraEvent = JSON.parse(event.data);
-          setEvents(prev => [...prev, eventData]);
-        } catch (error) {
-          console.error('Failed to parse event data:', error);
-        }
-      };
-
       newWs.onclose = () => {
         console.log('WebSocket connection closed');
         onConnectionStatusChange('disconnected');
@@ -97,10 +83,6 @@ const EventStream: React.FC<EventStreamProps> = ({
       }
     };
   }, [ws, onWebSocketChange, onConnectionStatusChange]);
-
-  const clearEvents = () => {
-    setEvents([]);
-  };
 
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {
@@ -135,7 +117,7 @@ const EventStream: React.FC<EventStreamProps> = ({
           </div>
         ) : (
           <ul className="space-y-2">
-            {events.map((event, index) => (
+            {events.map((event: ChimeraEvent, index: number) => (
               <li key={index} className={`p-3 rounded-md border-l-4 ${getEventTypeColor(event.type)}`}>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
