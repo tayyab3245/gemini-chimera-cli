@@ -11,6 +11,9 @@
 # Project Chimera context - local development only
 context/
 
+# Local development files
+/packages/core/src/mind/
+
 # Dependency directory
 node_modules
 bower_components
@@ -42,3 +45,4 @@ packages/*/coverage/
 packages/cli/src/generated/
 .integration-tests/
 packages/vscode-ide-companion/*.vsix
+project-directory-tree.md
