@@ -1,9 +1,16 @@
-import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo, useCallback } from 'react';
 
 export interface ChimeraEvent {
   ts: number;
   type: string;
   payload: any;
+}
+
+export interface ChatMessage {
+  id: string;
+  timestamp: number;
+  text: string;
+  sender: 'user' | 'kernel';
 }
 
 export interface FilterState {
@@ -29,6 +36,9 @@ interface EventContextType {
   filters: FilterState;
   setFilters: (filters: FilterState) => void;
   clearEvents: () => void;
+  chatMessages: ChatMessage[];
+  addChatMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  sendChatMessage: (text: string) => void;
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
@@ -48,6 +58,19 @@ interface EventProviderProps {
 
 export const EventProvider: React.FC<EventProviderProps> = ({ children, ws }) => {
   const [events, setEvents] = useState<ChimeraEvent[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    // Load chat messages from localStorage
+    const saved = localStorage.getItem('chimera-chat-messages');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed.slice(-50) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
   const [filters, setFilters] = useState<FilterState>({
     query: '',
     agents: {
@@ -65,6 +88,41 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children, ws }) =>
     },
   });
 
+  // Save chat messages to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('chimera-chat-messages', JSON.stringify(chatMessages.slice(-50)));
+  }, [chatMessages]);
+
+  const addChatMessage = useCallback((message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    const newMessage: ChatMessage = {
+      id: `${Date.now()}-${Math.random()}`,
+      timestamp: Date.now(),
+      ...message
+    };
+    
+    setChatMessages(prev => {
+      const updated = [...prev, newMessage];
+      return updated.slice(-50); // Keep only last 50 messages
+    });
+  }, []);
+
+  const sendChatMessage = useCallback((text: string) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not connected, cannot send chat message');
+      return;
+    }
+
+    // Add user message to chat
+    addChatMessage({ text, sender: 'user' });
+
+    // Send to WebSocket
+    try {
+      ws.send(JSON.stringify({ action: 'chat', text }));
+    } catch (error) {
+      console.error('Failed to send chat message:', error);
+    }
+  }, [ws, addChatMessage]);
+
   useEffect(() => {
     if (!ws) return;
 
@@ -72,6 +130,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children, ws }) =>
       try {
         const eventData: ChimeraEvent = JSON.parse(event.data);
         setEvents(prev => [...prev, eventData]);
+
+        // If this is a KERNEL log event, add it to chat
+        if (eventData.type === 'log' && eventData.payload?.agent === 'KERNEL') {
+          const text = eventData.payload.text || eventData.payload.message || JSON.stringify(eventData.payload);
+          addChatMessage({ text, sender: 'kernel' });
+        }
       } catch (error) {
         console.error('Failed to parse event data:', error);
       }
@@ -82,7 +146,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children, ws }) =>
     return () => {
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws]);
+  }, [ws, addChatMessage]);
 
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
@@ -120,7 +184,16 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children, ws }) =>
   };
 
   return (
-    <EventContext.Provider value={{ events, filteredEvents, filters, setFilters, clearEvents }}>
+    <EventContext.Provider value={{ 
+      events, 
+      filteredEvents, 
+      filters, 
+      setFilters, 
+      clearEvents,
+      chatMessages,
+      addChatMessage,
+      sendChatMessage
+    }}>
       {children}
     </EventContext.Provider>
   );
