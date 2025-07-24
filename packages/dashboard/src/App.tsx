@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import EventStream from './components/EventStream';
 import ControlPanel from './components/ControlPanel';
 import EventTimeline from './components/EventTimeline';
+import ProgressBar from './components/ProgressBar';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { EventProvider } from './contexts/EventContext';
 
@@ -24,6 +25,7 @@ function App() {
             </header>
             
             <main className="space-y-8">
+              <ProgressBar />
               <ControlPanel />
               <EventTimeline />
               <EventStream 
