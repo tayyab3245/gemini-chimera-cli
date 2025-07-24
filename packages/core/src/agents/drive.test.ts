@@ -11,6 +11,7 @@ import { AgentType } from '../event-bus/types.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import type { AgentContext } from './agent.js';
 import type { PlanStep } from '../interfaces/chimera.js';
+import type { DriveInput } from './drive.js';
 
 describe('DriveAgent', () => {
   let driveAgent: DriveAgent;
@@ -18,6 +19,7 @@ describe('DriveAgent', () => {
   let mockToolRegistry: ToolRegistry;
   let publishSpy: Mock;
   let mockWriteTool: any;
+  let mockExecTool: any;
 
   beforeEach(() => {
     mockBus = new ChimeraEventBus();
@@ -27,6 +29,11 @@ describe('DriveAgent', () => {
     mockWriteTool = {
       execute: vi.fn().mockResolvedValue({ success: true })
     };
+
+    // Create mock exec tool  
+    mockExecTool = {
+      execute: vi.fn().mockResolvedValue({ success: true })
+    };
     
     // Create mock tool registry
     mockToolRegistry = {
@@ -34,14 +41,17 @@ describe('DriveAgent', () => {
         if (toolName === 'write_file') {
           return mockWriteTool;
         }
+        if (toolName === 'exec_shell') {
+          return mockExecTool;
+        }
         return null;
       })
     } as any;
     
-    driveAgent = new DriveAgent(mockBus, mockToolRegistry);
+    driveAgent = new DriveAgent(mockBus);
   });
 
-  describe('successful file write', () => {
+  describe('write command', () => {
     it('should execute write command and return file path as artifact', async () => {
       const planStep: PlanStep = {
         step_id: 'S1',
@@ -53,9 +63,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -99,9 +110,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -126,9 +138,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -143,11 +156,140 @@ describe('DriveAgent', () => {
     });
   });
 
-  describe('error cases', () => {
-    it('should handle missing write_file tool and publish error event', async () => {
-      // Create agent without tool registry
-      const agentWithoutRegistry = new DriveAgent(mockBus);
+  describe('run command', () => {
+    it('should execute run command with exec_shell tool', async () => {
+      const planStep: PlanStep = {
+        step_id: 'S2',
+        description: 'run:npm install',
+        depends_on: [],
+        status: 'pending',
+        artifacts: [],
+        attempts: 0,
+        max_attempts: 3
+      };
 
+      const ctx: AgentContext<DriveInput> = {
+        input: { planStep, artifacts: [] },
+        bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
+      };
+
+      const result = await driveAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output!.artifacts).toEqual(['npm install']);
+      expect(mockToolRegistry.getTool).toHaveBeenCalledWith('exec_shell');
+      expect(mockExecTool.execute).toHaveBeenCalledWith(
+        { command: 'npm install' },
+        expect.any(AbortSignal)
+      );
+    });
+  });
+
+  describe('test command', () => {
+    it('should execute test command with exec_shell tool', async () => {
+      const planStep: PlanStep = {
+        step_id: 'S3',
+        description: 'test:npm test -- --coverage',
+        depends_on: [],
+        status: 'pending',
+        artifacts: [],
+        attempts: 0,
+        max_attempts: 3
+      };
+
+      const ctx: AgentContext<DriveInput> = {
+        input: { planStep, artifacts: [] },
+        bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
+      };
+
+      const result = await driveAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output!.artifacts).toEqual(['npm test -- --coverage']);
+      expect(mockToolRegistry.getTool).toHaveBeenCalledWith('exec_shell');
+      expect(mockExecTool.execute).toHaveBeenCalledWith(
+        { command: 'npm test -- --coverage' },
+        expect.any(AbortSignal)
+      );
+    });
+
+    it('should default to npm test when no args provided', async () => {
+      const planStep: PlanStep = {
+        step_id: 'S3',
+        description: 'test:',
+        depends_on: [],
+        status: 'pending',
+        artifacts: [],
+        attempts: 0,
+        max_attempts: 3
+      };
+
+      const ctx: AgentContext<DriveInput> = {
+        input: { planStep, artifacts: [] },
+        bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
+      };
+
+      const result = await driveAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output!.artifacts).toEqual(['npm test']);
+      expect(mockExecTool.execute).toHaveBeenCalledWith(
+        { command: 'npm test' },
+        expect.any(AbortSignal)
+      );
+    });
+  });
+
+  describe('multiple commands', () => {
+    it('should execute multiple commands and emit progress events', async () => {
+      const planStep: PlanStep = {
+        step_id: 'S4',
+        description: 'write:package.json:{"name":"test"}\nrun:npm install\ntest:npm test',
+        depends_on: [],
+        status: 'pending',
+        artifacts: [],
+        attempts: 0,
+        max_attempts: 3
+      };
+
+      const ctx: AgentContext<DriveInput> = {
+        input: { planStep, artifacts: [] },
+        bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
+      };
+
+      const result = await driveAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output!.artifacts).toEqual(['package.json', 'npm install', 'npm test']);
+      
+      // Check progress events were emitted
+      const progressEvents = publishSpy.mock.calls
+        .filter(call => call[0].type === 'progress')
+        .map(call => call[0].payload.percent);
+      expect(progressEvents).toEqual([0, 33, 67, 100]);
+      
+      // Verify all tools were called
+      expect(mockWriteTool.execute).toHaveBeenCalledWith(
+        { file_path: 'package.json', content: '{"name":"test"}' },
+        expect.any(AbortSignal)
+      );
+      expect(mockExecTool.execute).toHaveBeenCalledWith(
+        { command: 'npm install' },
+        expect.any(AbortSignal)
+      );
+      expect(mockExecTool.execute).toHaveBeenCalledWith(
+        { command: 'npm test' },
+        expect.any(AbortSignal)
+      );
+    });
+  });
+
+  describe('error cases', () => {
+    it('should handle missing ToolRegistry and publish error event', async () => {
       const planStep: PlanStep = {
         step_id: 'S1',
         description: 'write:./test.txt:Hello World',
@@ -158,22 +300,23 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: {} // No toolRegistry
       };
 
-      const result = await agentWithoutRegistry.run(ctx);
+      const result = await driveAgent.run(ctx);
 
       expect(result.ok).toBe(false);
-      expect(result.error).toContain('Tool registry not available');
+      expect(result.error).toContain('ToolRegistry not available');
 
       // Should publish error event
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'error',
         payload: expect.objectContaining({
           agent: 'DRIVE',
-          message: 'Tool registry not available for write_file execution'
+          message: expect.stringContaining('ToolRegistry not available')
         })
       }));
     });
@@ -184,8 +327,6 @@ describe('DriveAgent', () => {
         getTool: vi.fn().mockReturnValue(null)
       } as any;
 
-      const agentWithEmptyRegistry = new DriveAgent(mockBus, emptyRegistry);
-
       const planStep: PlanStep = {
         step_id: 'S1',
         description: 'write:./test.txt:Hello World',
@@ -196,22 +337,23 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: emptyRegistry }
       };
 
-      const result = await agentWithEmptyRegistry.run(ctx);
+      const result = await driveAgent.run(ctx);
 
       expect(result.ok).toBe(false);
-      expect(result.error).toContain('write_file tool not found in registry');
+      expect(result.error).toContain('write_file tool not found');
 
       // Should publish error event
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'error',
         payload: expect.objectContaining({
           agent: 'DRIVE',
-          message: 'write_file tool not found in registry'
+          message: expect.stringContaining('write_file tool not found')
         })
       }));
     });
@@ -227,9 +369,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -252,9 +395,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -283,9 +427,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -295,11 +440,11 @@ describe('DriveAgent', () => {
     });
   });
 
-  describe('non-write commands', () => {
-    it('should handle non-write commands by returning empty artifacts', async () => {
+  describe('non-command descriptions', () => {
+    it('should handle non-command descriptions by returning empty artifacts', async () => {
       const planStep: PlanStep = {
         step_id: 'S1',
-        description: 'run tests for the application',
+        description: 'Analyze the requirements and create a plan',
         depends_on: [],
         status: 'pending',
         artifacts: [],
@@ -307,9 +452,10 @@ describe('DriveAgent', () => {
         max_attempts: 3
       };
 
-      const ctx: AgentContext<{ planStep: PlanStep; artifacts: string[] }> = {
+      const ctx: AgentContext<DriveInput> = {
         input: { planStep, artifacts: [] },
         bus: mockBus,
+        dependencies: { toolRegistry: mockToolRegistry }
       };
 
       const result = await driveAgent.run(ctx);
@@ -319,6 +465,7 @@ describe('DriveAgent', () => {
 
       // Should not call any tools
       expect(mockWriteTool.execute).not.toHaveBeenCalled();
+      expect(mockExecTool.execute).not.toHaveBeenCalled();
 
       // Should still publish progress events
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({

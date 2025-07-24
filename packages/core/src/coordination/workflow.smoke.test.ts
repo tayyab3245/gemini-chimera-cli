@@ -17,10 +17,18 @@ import * as os from 'os';
 describe('Workflow Smoke Tests', () => {
   let engine: WorkflowEngine;
   let bus: ChimeraEventBus;
+  let toolRegistry: ToolRegistry;
   
   beforeEach(() => {
     bus = new ChimeraEventBus();
-    engine = new WorkflowEngine(bus);
+    const config = new Config({ 
+      targetDir: process.cwd(),
+      sessionId: 'test-session'
+    } as never);
+    toolRegistry = new ToolRegistry(config);
+    const writeFileTool = new WriteFileTool(config);
+    toolRegistry.registerTool(writeFileTool);
+    engine = new WorkflowEngine(bus, toolRegistry);
   });
 
   it('should complete basic workflow with valid input', async () => {
@@ -94,15 +102,10 @@ describe('Workflow Smoke Tests', () => {
       bus = new ChimeraEventBus();
       
       // Create a minimal config for ToolRegistry
-      const mockConfig = {
-        getProjectRoot: () => tempDir,
-        getTargetDir: () => tempDir,
-        isInteractive: () => false,
-        getApprovalMode: () => 'auto',
-        setApprovalMode: () => {},
-        getGeminiClient: () => null,
-        getToolRegistry: async () => toolRegistry
-      } as unknown as Config;
+      const mockConfig = new Config({
+        targetDir: tempDir,
+        sessionId: 'test-session'
+      } as never);
       
       toolRegistry = new ToolRegistry(mockConfig);
       
@@ -110,7 +113,7 @@ describe('Workflow Smoke Tests', () => {
       const writeFileTool = new WriteFileTool(mockConfig);
       toolRegistry.registerTool(writeFileTool);
       
-      agent = new DriveAgent(bus, toolRegistry);
+      agent = new DriveAgent(bus);
     });
 
     afterEach(async () => {
@@ -153,7 +156,8 @@ describe('Workflow Smoke Tests', () => {
           },
           artifacts: []
         },
-        bus
+        bus,
+        dependencies: { toolRegistry }
       };
 
       // Execute the DriveAgent

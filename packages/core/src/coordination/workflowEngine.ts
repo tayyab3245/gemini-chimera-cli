@@ -9,6 +9,7 @@ import { SynthAgent } from '../agents/synth.js';
 import { DriveAgent } from '../agents/drive.js';
 import { AuditAgent } from '../agents/audit.js';
 import type { AgentContext } from '../agents/agent.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 
 export class WorkflowEngine {
   private stateMachine: WorkflowStateMachine;
@@ -17,7 +18,7 @@ export class WorkflowEngine {
   private drive: DriveAgent;
   private audit: AuditAgent;
 
-  constructor(private bus: ChimeraEventBus) {
+  constructor(private bus: ChimeraEventBus, private toolRegistry?: ToolRegistry) {
     this.stateMachine = new WorkflowStateMachine(bus);
     this.kernel = new KernelAgent(bus);
     this.synth = new SynthAgent(bus);
@@ -113,7 +114,10 @@ export class WorkflowEngine {
     const contextSlice = buildContextSlice(agentKind, fullContext);
     const agentContext: AgentContext<any> = {
       input: contextSlice,
-      bus: this.bus
+      bus: this.bus,
+      dependencies: {
+        toolRegistry: this.toolRegistry
+      }
     };
 
     // Execute the appropriate agent

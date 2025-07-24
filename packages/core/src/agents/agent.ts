@@ -6,6 +6,7 @@
 
 import type { ChimeraEventBus } from '../event-bus/bus.js';
 import type { AgentType } from '../event-bus/types.js';
+import type { ToolRegistry } from '../tools/tool-registry.js';
 
 /**
  * Agent execution context with all necessary dependencies
@@ -13,6 +14,9 @@ import type { AgentType } from '../event-bus/types.js';
 export interface AgentContext<TInput = unknown> {
   input: TInput;
   bus: ChimeraEventBus;
+  dependencies?: {
+    toolRegistry?: ToolRegistry;
+  };
 }
 
 /**

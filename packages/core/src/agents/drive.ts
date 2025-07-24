@@ -8,7 +8,6 @@ import type { AgentContext, AgentResult } from './agent.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
 import type { PlanStep } from '../interfaces/chimera.js';
-import { ToolRegistry } from '../tools/tool-registry.js';
 
 export interface DriveInput {
   planStep: PlanStep;
@@ -29,10 +28,7 @@ export interface ExecutedStep {
 export class DriveAgent {
   readonly id = AgentType.DRIVE;
   
-  constructor(
-    private bus: ChimeraEventBus,
-    private toolRegistry?: ToolRegistry
-  ) {}
+  constructor(private bus: ChimeraEventBus) {}
 
   async run(
     ctx: AgentContext<DriveInput>
@@ -46,21 +42,44 @@ export class DriveAgent {
       const { planStep, artifacts: inputArtifacts } = ctx.input;
       const description = planStep.description;
 
-      // Check if this is a write:<filePath>:<content> pattern
-      if (this.isWriteCommand(description)) {
-        const result = await this.executeWriteCommand(description);
-        
-        // Progress: 100% - Execution complete
-        this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
-        
-        this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-        return { ok: true, output: { artifacts: result.artifacts } };
+      // Check if ToolRegistry is available via context
+      const toolRegistry = ctx.dependencies?.toolRegistry;
+      if (!toolRegistry) {
+        throw new Error('ToolRegistry not available in agent context');
       }
 
-      // For non-write commands, return empty artifacts (not implemented)
-      this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
+      // Parse and execute commands
+      const commands = this.parseCommands(description);
+      const artifacts: string[] = [];
+      
+      if (commands.length === 0) {
+        // No commands to execute - just emit 100% progress and return empty artifacts
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'progress', 
+          payload: { percent: 100 } 
+        });
+      } else {
+        // Execute each command with progress tracking
+        for (let i = 0; i < commands.length; i++) {
+          const command = commands[i];
+          const progressPercent = Math.round(((i + 1) / commands.length) * 100);
+          
+          // Execute the command
+          const commandArtifacts = await this.executeCommand(command, toolRegistry);
+          artifacts.push(...commandArtifacts);
+          
+          // Publish progress after each command
+          this.bus.publish({ 
+            ts: Date.now(), 
+            type: 'progress', 
+            payload: { percent: progressPercent } 
+          });
+        }
+      }
+
       this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
-      return { ok: true, output: { artifacts: [] } };
+      return { ok: true, output: { artifacts } };
 
     } catch (error) {
       this.bus.publish({
@@ -77,45 +96,83 @@ export class DriveAgent {
     }
   }
 
-  private isWriteCommand(description: string): boolean {
-    return description.startsWith('write:') && description.includes(':');
+  private parseCommands(description: string): Array<{ verb: string; args: string }> {
+    // Split by newlines and filter out empty lines
+    const lines = description.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const commands: Array<{ verb: string; args: string }> = [];
+
+    for (const line of lines) {
+      // Check for supported verbs: write:, run:, test:
+      if (line.startsWith('write:')) {
+        commands.push({ verb: 'write', args: line.substring(6) }); // Remove "write:"
+      } else if (line.startsWith('run:')) {
+        commands.push({ verb: 'run', args: line.substring(4) }); // Remove "run:"
+      } else if (line.startsWith('test:')) {
+        commands.push({ verb: 'test', args: line.substring(5) }); // Remove "test:"
+      } else if (line.includes(':')) {
+        // Fallback: treat as write command if it contains colons (backward compatibility)
+        commands.push({ verb: 'write', args: line });
+      }
+    }
+
+    // If no commands found, check if the description is a single command
+    if (commands.length === 0) {
+      if (description.startsWith('write:')) {
+        commands.push({ verb: 'write', args: description.substring(6) });
+      } else if (description.startsWith('run:')) {
+        commands.push({ verb: 'run', args: description.substring(4) });
+      } else if (description.startsWith('test:')) {
+        commands.push({ verb: 'test', args: description.substring(5) });
+      }
+      // No default - if it doesn't match any pattern, return empty commands array
+    }
+
+    return commands;
   }
 
-  private async executeWriteCommand(description: string): Promise<{ artifacts: string[] }> {
-    // Parse write:<filePath>:<content> pattern
-    const writePrefix = 'write:';
-    const afterWrite = description.substring(writePrefix.length);
-    
+  private async executeCommand(
+    command: { verb: string; args: string }, 
+    toolRegistry: any
+  ): Promise<string[]> {
+    switch (command.verb) {
+      case 'write':
+        return await this.executeWriteCommand(command.args, toolRegistry);
+      case 'run':
+        return await this.executeRunCommand(command.args, toolRegistry);
+      case 'test':
+        return await this.executeTestCommand(command.args, toolRegistry);
+      default:
+        throw new Error(`Unsupported verb: ${command.verb}`);
+    }
+  }
+
+  private async executeWriteCommand(args: string, toolRegistry: any): Promise<string[]> {
+    // Parse write command: <filePath>:<content>
     let filePath: string;
     let content: string;
     
     // Check if this looks like a Windows path (starts with drive letter like C:)
-    const windowsPathMatch = afterWrite.match(/^([a-zA-Z]:\\[^:]*?):(.*)/);
+    const windowsPathMatch = args.match(/^([a-zA-Z]:\\[^:]*?):(.*)/);
     if (windowsPathMatch) {
       // Windows path: C:\path\file.txt:content
       filePath = windowsPathMatch[1];
       content = windowsPathMatch[2];
     } else {
       // Unix-style path or simple filename: find first colon to separate path from content
-      const firstColonIndex = afterWrite.indexOf(':');
+      const firstColonIndex = args.indexOf(':');
       if (firstColonIndex === -1) {
-        throw new Error('Invalid write command format. Expected: write:<filePath>:<content>');
+        throw new Error('Invalid write command format. Expected: <filePath>:<content>');
       }
-      filePath = afterWrite.substring(0, firstColonIndex);
-      content = afterWrite.substring(firstColonIndex + 1);
+      filePath = args.substring(0, firstColonIndex);
+      content = args.substring(firstColonIndex + 1);
     }
 
     if (!filePath) {
       throw new Error('File path cannot be empty in write command');
     }
 
-    // Check if tool registry is available
-    if (!this.toolRegistry) {
-      throw new Error('Tool registry not available for write_file execution');
-    }
-
     // Get the write_file tool from the registry
-    const writeFileTool = this.toolRegistry.getTool('write_file');
+    const writeFileTool = toolRegistry.getTool('write_file');
     if (!writeFileTool) {
       throw new Error('write_file tool not found in registry');
     }
@@ -127,14 +184,50 @@ export class DriveAgent {
     };
 
     const abortController = new AbortController();
-    const toolResult = await writeFileTool.execute(toolParams, abortController.signal);
-
-    // Validate tool execution result
-    if (!toolResult || typeof toolResult !== 'object') {
-      throw new Error('Tool execution returned invalid result');
-    }
+    await writeFileTool.execute(toolParams, abortController.signal);
 
     // Return the file path as an artifact
-    return { artifacts: [filePath] };
+    return [filePath];
+  }
+
+  private async executeRunCommand(args: string, toolRegistry: any): Promise<string[]> {
+    // Get the exec_shell tool from the registry
+    const execShellTool = toolRegistry.getTool('exec_shell');
+    if (!execShellTool) {
+      throw new Error('exec_shell tool not found in registry');
+    }
+
+    // Execute the shell command
+    const toolParams = {
+      command: args.trim()
+    };
+
+    const abortController = new AbortController();
+    const result = await execShellTool.execute(toolParams, abortController.signal);
+
+    // Return command as artifact (could be enhanced to return output files)
+    return [args.trim()];
+  }
+
+  private async executeTestCommand(args: string, toolRegistry: any): Promise<string[]> {
+    // Get the exec_shell tool from the registry
+    const execShellTool = toolRegistry.getTool('exec_shell');
+    if (!execShellTool) {
+      throw new Error('exec_shell tool not found in registry');
+    }
+
+    // Default to npm test if no specific command provided
+    const testCommand = args.trim() || 'npm test';
+
+    // Execute the test command
+    const toolParams = {
+      command: testCommand
+    };
+
+    const abortController = new AbortController();
+    const result = await execShellTool.execute(toolParams, abortController.signal);
+
+    // Return test command as artifact
+    return [testCommand];
   }
 }
