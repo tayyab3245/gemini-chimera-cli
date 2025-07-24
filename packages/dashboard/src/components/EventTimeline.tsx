@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useEvents, ChimeraEvent } from '../contexts/EventContext';
+import AgentAvatar, { AgentType, AgentState } from './AgentAvatar';
 
 const EventTimeline: React.FC = () => {
   const { events, filteredEvents } = useEvents();
@@ -69,6 +70,30 @@ const EventTimeline: React.FC = () => {
       return event.payload.agent;
     }
     return null;
+  };
+
+  const getAgentFromEvent = (event: ChimeraEvent): AgentType | null => {
+    const agentName = getAgentName(event);
+    if (!agentName) return null;
+    
+    const upperAgent = agentName.toUpperCase();
+    if (['KERNEL', 'SYNTH', 'DRIVE', 'AUDIT'].includes(upperAgent)) {
+      return upperAgent as AgentType;
+    }
+    return null;
+  };
+
+  const getAgentStateFromEvent = (event: ChimeraEvent): AgentState => {
+    switch (event.type) {
+      case 'agent-start':
+        return 'running';
+      case 'agent-end':
+        return 'done';
+      case 'error':
+        return 'error';
+      default:
+        return 'idle';
+    }
   };
 
   // Handle scroll detection
@@ -152,6 +177,14 @@ const EventTimeline: React.FC = () => {
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
+                          {/* Agent Avatar */}
+                          {getAgentFromEvent(event) && (
+                            <AgentAvatar 
+                              agent={getAgentFromEvent(event)!} 
+                              state={getAgentStateFromEvent(event)}
+                              size="sm"
+                            />
+                          )}
                           <span className="font-mono text-sm text-gray-500">
                             {formatTimestamp(event.ts)}
                           </span>
