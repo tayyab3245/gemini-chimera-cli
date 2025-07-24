@@ -3,6 +3,7 @@ import EventStream from './components/EventStream';
 import ControlPanel from './components/ControlPanel';
 import EventTimeline from './components/EventTimeline';
 import ProgressBar from './components/ProgressBar';
+import ToastManager from './components/ToastManager';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { EventProvider } from './contexts/EventContext';
 
@@ -41,6 +42,9 @@ function App() {
             </footer>
           </div>
         </div>
+        
+        {/* Toast notifications for errors */}
+        <ToastManager />
       </EventProvider>
     </WebSocketProvider>
   );
