@@ -17,7 +17,7 @@ export interface ProgressPayload {
 }
 
 export interface ErrorPayload {
-  agent: 'DRIVE' | 'AUDIT';
+  agent: 'KERNEL' | 'SYNTH' | 'DRIVE' | 'AUDIT';
   stepId?: string;         // present if DRIVE failed
   message: string;         // human‑readable summary
   details?: unknown;       // optional raw error / review object
