@@ -6,10 +6,20 @@ interface ChimeraEvent {
   payload: any;
 }
 
-const EventStream: React.FC = () => {
+interface EventStreamProps {
+  ws: WebSocket | null;
+  connectionStatus: 'connecting' | 'connected' | 'disconnected';
+  onWebSocketChange: (ws: WebSocket | null) => void;
+  onConnectionStatusChange: (status: 'connecting' | 'connected' | 'disconnected') => void;
+}
+
+const EventStream: React.FC<EventStreamProps> = ({ 
+  ws, 
+  connectionStatus, 
+  onWebSocketChange, 
+  onConnectionStatusChange 
+}) => {
   const [events, setEvents] = useState<ChimeraEvent[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
-  const wsRef = useRef<WebSocket | null>(null);
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -44,16 +54,16 @@ const EventStream: React.FC = () => {
 
   useEffect(() => {
     const connect = () => {
-      setConnectionStatus('connecting');
-      const ws = new WebSocket('ws://localhost:4000/events');
-      wsRef.current = ws;
+      onConnectionStatusChange('connecting');
+      const newWs = new WebSocket('ws://localhost:4000/events');
+      onWebSocketChange(newWs);
 
-      ws.onopen = () => {
+      newWs.onopen = () => {
         console.log('Connected to WebSocket');
-        setConnectionStatus('connected');
+        onConnectionStatusChange('connected');
       };
 
-      ws.onmessage = (event) => {
+      newWs.onmessage = (event) => {
         try {
           const eventData: ChimeraEvent = JSON.parse(event.data);
           setEvents(prev => [...prev, eventData]);
@@ -62,29 +72,31 @@ const EventStream: React.FC = () => {
         }
       };
 
-      ws.onclose = () => {
+      newWs.onclose = () => {
         console.log('WebSocket connection closed');
-        setConnectionStatus('disconnected');
-        wsRef.current = null;
+        onConnectionStatusChange('disconnected');
+        onWebSocketChange(null);
         
         // Attempt to reconnect after 3 seconds
         setTimeout(connect, 3000);
       };
 
-      ws.onerror = (error) => {
+      newWs.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setConnectionStatus('disconnected');
+        onConnectionStatusChange('disconnected');
       };
     };
 
-    connect();
+    if (!ws) {
+      connect();
+    }
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
+      if (ws) {
+        ws.close();
       }
     };
-  }, []);
+  }, [ws, onWebSocketChange, onConnectionStatusChange]);
 
   const clearEvents = () => {
     setEvents([]);
