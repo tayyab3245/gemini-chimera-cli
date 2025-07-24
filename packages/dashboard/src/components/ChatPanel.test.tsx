@@ -250,8 +250,14 @@ describe('ChatPanel', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('chat-message-kernel')).toBeInTheDocument();
-        expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
         expect(screen.getByText('Kernel')).toBeInTheDocument();
+        // Check that markdown rendering has processed the text
+        const kernelMessage = screen.getByTestId('chat-message-kernel');
+        expect(kernelMessage).toHaveTextContent('Hello with code and bold');
+        // Verify bold formatting is applied
+        expect(kernelMessage.querySelector('strong')).toBeInTheDocument();
+        // Verify code formatting is applied
+        expect(kernelMessage.querySelector('code')).toBeInTheDocument();
       });
     });
 
