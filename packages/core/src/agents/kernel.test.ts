@@ -64,13 +64,13 @@ describe('KernelAgent', () => {
       // Verify GeminiChat was called with consultant prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
         { message: expect.stringContaining('You are an AI consultant helping to clarify user requests') },
-        "kernel-consultant-analysis"
+        "kernel-clarification-analysis"
       );
 
       // Verify the user input was included in the prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
         { message: expect.stringContaining('I need help with the login bug in my authentication system') },
-        "kernel-consultant-analysis"
+        "kernel-clarification-analysis"
       );
 
       // Verify event publishing for clarified task
@@ -100,7 +100,7 @@ describe('KernelAgent', () => {
       });
 
       const ctx: AgentContext<{ userInput: string }> = {
-        input: { userInput: 'I need help with my code' },
+        input: { userInput: 'help me' }, // Very vague input 
         bus: mockBus,
       };
 
@@ -261,7 +261,7 @@ describe('KernelAgent', () => {
       // Verify GeminiChat was called with the loaded prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
         { message: expect.stringContaining('Custom AI consultant prompt from mind directory') },
-        "kernel-consultant-analysis"
+        "kernel-clarification-analysis"
       );
     });
 
@@ -275,7 +275,7 @@ describe('KernelAgent', () => {
       });
 
       const ctx: AgentContext<{ userInput: string }> = {
-        input: { userInput: 'I want to build something' },
+        input: { userInput: 'I want to build a login system' }, // Clear, specific input without vague terms
         bus: mockBus,
       };
 
@@ -290,7 +290,7 @@ describe('KernelAgent', () => {
       // Verify GeminiChat was called with the fallback prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
         { message: expect.stringContaining('Rewrite user request in ≤50 chars.') },
-        "kernel-consultant-analysis"
+        "kernel-clarification-analysis"
       );
     });
 
@@ -319,7 +319,155 @@ describe('KernelAgent', () => {
       // Verify GeminiChat was called with the fallback prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
         { message: expect.stringContaining('Rewrite user request in ≤50 chars.') },
-        "kernel-consultant-analysis"
+        "kernel-clarification-analysis"
+      );
+    });
+  });
+
+  describe('Adaptive follow-up behavior', () => {
+    it('should ask follow-up question when input is vague', async () => {
+      // Mock follow-up prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('followup')) {
+          return Promise.resolve('Ask a clarifying question to understand what the user wants.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a follow-up question
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'What specific task would you like help with?' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'help me' }, // Very vague input
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('What specific task would you like help with?');
+
+      // Verify agent-followup event was published
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup',
+        payload: {
+          agent: AgentType.KERNEL,
+          question: 'What specific task would you like help with?'
+        }
+      }));
+
+      // Verify follow-up prompt was used
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        { message: expect.stringContaining('Ask a clarifying question to understand what the user wants.') },
+        "kernel-follow-up-analysis"
+      );
+    });
+
+    it('should clarify task when input is clear and specific', async () => {
+      // Mock consultant prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('consult')) {
+          return Promise.resolve('Rewrite the user request as a clear task sentence.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a clarified task
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'Fix authentication login bug' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'Fix the login bug in the authentication module' }, // Clear, specific input
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('Fix authentication login bug');
+
+      // Verify NO agent-followup event was published
+      expect(publishSpy).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup'
+      }));
+
+      // Verify consultant prompt was used
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        { message: expect.stringContaining('Rewrite the user request as a clear task sentence.') },
+        "kernel-clarification-analysis"
+      );
+    });
+
+    it('should detect vague phrases and trigger follow-up', async () => {
+      // Mock follow-up prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('followup')) {
+          return Promise.resolve('Ask a clarifying question.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a follow-up question
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'Could you clarify what you want to improve?' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'make my app better' }, // Contains vague phrase "make better"
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('Could you clarify what you want to improve?');
+
+      // Verify agent-followup event was published
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup',
+        payload: {
+          agent: AgentType.KERNEL,
+          question: 'Could you clarify what you want to improve?'
+        }
+      }));
+    });
+
+    it('should boost confidence for specific technical terms', async () => {
+      // Mock consultant prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('consult')) {
+          return Promise.resolve('Rewrite as clear task.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a clarified task
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'Debug API endpoint error' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'fix api bug' }, // Short but has specific terms "api" and "bug"
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('Debug API endpoint error');
+
+      // Verify NO agent-followup event was published (confident due to specific terms)
+      expect(publishSpy).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup'
+      }));
+
+      // Verify consultant prompt was used for clarification
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        { message: expect.stringContaining('Rewrite as clear task.') },
+        "kernel-clarification-analysis"
       );
     });
   });

@@ -16,22 +16,81 @@ export class KernelAgent {
 
   constructor(private bus: ChimeraEventBus, private geminiChat?: GeminiChat) {}
 
+  /**
+   * Compute confidence score for input clarity (0-1 scale)
+   * Lower scores indicate vague/unclear inputs that need follow-up questions
+   */
+  private computeConfidenceScore(userInput: string): number {
+    const input = userInput.toLowerCase().trim();
+    
+    // Factor 1: Token count (very short inputs are often vague)
+    const tokens = input.split(/\s+/).filter(token => token.length > 0);
+    const tokenScore = Math.min(tokens.length / 5, 1.0); // 5+ tokens = full score
+    
+    // Factor 2: Vague phrases detection
+    const vaguePatterns = [
+      'help me', 'do something', 'make it', 'fix this', 'fix it',
+      'help with', 'work on', 'handle', 'deal with', 'take care',
+      'make better', 'improve', 'optimize', 'enhance', 'update',
+      'something', 'anything', 'stuff', 'things', 'whatever',
+      'make my', 'make app better', 'better'
+    ];
+    
+    const hasVaguePhrase = vaguePatterns.some(pattern => input.includes(pattern));
+    const vagueScore = hasVaguePhrase ? 0.1 : 1.0; // Lower penalty for vague phrases
+    
+    // Factor 3: Specificity indicators (specific terms boost confidence)
+    const specificPatterns = [
+      'bug', 'error', 'function', 'class', 'variable', 'method',
+      'login', 'authentication', 'database', 'api', 'endpoint',
+      'component', 'module', 'file', 'directory', 'config'
+    ];
+    
+    const hasSpecificTerm = specificPatterns.some(pattern => input.includes(pattern));
+    const specificityBonus = hasSpecificTerm ? 0.2 : 0.0;
+    
+    // Combine factors (weighted average)
+    const baseScore = (tokenScore * 0.3) + (vagueScore * 0.7);
+    const finalScore = Math.min(baseScore + specificityBonus, 1.0);
+    
+    return finalScore;
+  }
+
   async run(ctx: AgentContext<{ userInput: string }>): Promise<AgentResult<string>> {
     this.bus.publish({ ts: Date.now(), type: 'agent-start', payload: { id: this.id }});
     
     try {
-      // Progress: 25% - Starting consultant analysis
+      // Progress: 25% - Starting analysis
       this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 25 } });
       this.bus.publish({ ts: Date.now(), type: 'log', payload: `${this.id} analyzing user request` });
 
-      // Progress: 50% - Calling GeminiChat for consultant analysis
+      // Progress: 30% - Computing confidence score
+      this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 30 } });
+      
+      // Compute confidence score for input clarity
+      const confidence = this.computeConfidenceScore(ctx.input.userInput);
+      const isVague = confidence < 0.5; // Low confidence threshold
+      
+      this.bus.publish({ ts: Date.now(), type: 'log', payload: `Confidence score: ${confidence.toFixed(2)} (${isVague ? 'vague' : 'clear'})` });
+
+      // Progress: 50% - Calling GeminiChat for analysis
       this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 50 } });
       
-      // Use AI-as-Consultant prompt to analyze user input
       if (this.geminiChat) {
-        // Load prompt dynamically from mind directory
-        const consultPrompt = await loadPrompt('packages/core/src/mind/kernel.consult.prompt.ts');
-        const prompt = consultPrompt || 'Rewrite user request in ≤50 chars.';
+        let prompt: string;
+        let analysisType: string;
+        
+        if (isVague) {
+          // Use follow-up prompt for vague inputs
+          const followupPrompt = await loadPrompt('packages/core/src/mind/kernel.followup.prompt.ts');
+          prompt = followupPrompt || 'What specific task would you like help with?';
+          analysisType = 'follow-up';
+        } else {
+          // Use consultant prompt for clear inputs
+          const consultPrompt = await loadPrompt('packages/core/src/mind/kernel.consult.prompt.ts');
+          prompt = consultPrompt || 'Rewrite user request in ≤50 chars.';
+          analysisType = 'clarification';
+        }
         
         const fullPrompt = `${prompt}
 
@@ -39,43 +98,42 @@ User request: "${ctx.input.userInput}"
 
 Response:`;
 
-        const consultantResponse = await this.geminiChat.sendMessage(
+        const response = await this.geminiChat.sendMessage(
           { message: fullPrompt },
-          "kernel-consultant-analysis"
+          `kernel-${analysisType}-analysis`
         );
         
         // Extract response from Gemini
-        let response = 'Process user request'; // default fallback
-        if (consultantResponse?.candidates?.[0]?.content?.parts) {
-          response = consultantResponse.candidates[0].content.parts
+        let responseText = isVague ? 'Could you provide more details?' : 'Process user request';
+        if (response?.candidates?.[0]?.content?.parts) {
+          responseText = response.candidates[0].content.parts
             .map((part: any) => part.text)
             .join('')
             .trim();
         }
         
-        // Check if response is a follow-up question (ends with "?")
-        if (response.endsWith('?')) {
+        if (isVague) {
           // Progress: 100% - Follow-up question generated
           this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
-          this.bus.publish({ ts: Date.now(), type: 'log', payload: `Follow-up question: ${response}` });
+          this.bus.publish({ ts: Date.now(), type: 'log', payload: `Follow-up question: ${responseText}` });
           this.bus.publish({ 
             ts: Date.now(), 
             type: 'agent-followup', 
             payload: { 
               agent: this.id, 
-              question: response 
+              question: responseText 
             } 
           });
           this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id }});
           
-          return { ok: true, output: response };
+          return { ok: true, output: responseText };
         } else {
           // Progress: 100% - Task clarified
           this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
-          this.bus.publish({ ts: Date.now(), type: 'log', payload: `Clarified task: ${response}` });
+          this.bus.publish({ ts: Date.now(), type: 'log', payload: `Clarified task: ${responseText}` });
           this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id }});
           
-          return { ok: true, output: response };
+          return { ok: true, output: responseText };
         }
       } else {
         // Fallback: return simple task description without GeminiChat
