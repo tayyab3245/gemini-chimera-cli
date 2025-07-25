@@ -17,6 +17,7 @@
     "sandboxImageUri": "us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:0.1.13"
   },
   "scripts": {
+    "dev": "concurrently --prefix \"[{name}]\" --names \"core,dashboard\" --prefix-colors \"blue,green\" \"npm run dev --workspace=packages/core\" \"npm run dev --workspace=packages/dashboard\"",
     "start": "node scripts/start.js",
     "debug": "cross-env DEBUG=1 node --inspect-brk scripts/start.js",
     "auth:npm": "npx google-artifactregistry-auth",

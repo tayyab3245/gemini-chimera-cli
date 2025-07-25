@@ -10,6 +10,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "node ../../scripts/build_package.js",
+    "dev": "npx tsx src/devServer.ts",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
     "test": "vitest run",

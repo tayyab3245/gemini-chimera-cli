@@ -27,7 +27,7 @@ export function startEventBusGateway(
   const clients = new Map<WebSocket, (() => void)[]>();
   
   // All event types we want to subscribe to
-  const eventTypes: ChimeraEventType[] = ['log', 'progress', 'agent-start', 'agent-end', 'error'];
+  const eventTypes: ChimeraEventType[] = ['log', 'progress', 'agent-start', 'agent-end', 'error', 'chat-reply'];
   
   wss.on('connection', (ws: WebSocket) => {
     console.log('WebSocket client connected');
@@ -50,6 +50,25 @@ export function startEventBusGateway(
       });
       unsubscribeFunctions.push(unsubscribe);
     }
+    
+    // Handle incoming messages from client
+    ws.on('message', (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log('Received WebSocket message:', message);
+        
+        // Handle chat messages
+        if (message.action === 'chat' && typeof message.text === 'string') {
+          bus.publish({
+            ts: Date.now(),
+            type: 'chat-message',
+            payload: { text: message.text }
+          });
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
     
     // Store client and its unsubscribe functions
     clients.set(ws, unsubscribeFunctions);

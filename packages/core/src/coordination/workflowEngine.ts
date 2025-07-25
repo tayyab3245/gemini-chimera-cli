@@ -25,6 +25,11 @@ export class WorkflowEngine {
     this.synth = new SynthAgent(bus);
     this.drive = new DriveAgent(bus);
     this.audit = new AuditAgent(bus);
+    
+    // Subscribe to chat messages from WebSocket clients
+    this.bus.subscribe('chat-message', (event) => {
+      this.handleChatMessage(event.payload.text);
+    });
   }
 
   async run(userInput: string): Promise<void> {
@@ -147,6 +152,49 @@ export class WorkflowEngine {
 
     // Update fullContext with any outputs (for future implementation)
     // This is where we would merge agent outputs back into the full context
+  }
+
+  /**
+   * Handle incoming chat messages from WebSocket clients
+   */
+  private async handleChatMessage(text: string): Promise<void> {
+    try {
+      console.log('Processing chat message:', text);
+      
+      // Create agent context for the chat message
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: text },
+        bus: this.bus,
+      };
+
+      // Process the message with KernelAgent (already has ACK handshake logic)
+      const result = await this.kernel.run(ctx);
+      
+      if (result.ok && result.output) {
+        // Broadcast the reply back to all WebSocket clients
+        this.bus.publish({
+          ts: Date.now(),
+          type: 'chat-reply',
+          payload: { text: result.output }
+        });
+      } else {
+        // Send error response
+        this.bus.publish({
+          ts: Date.now(),
+          type: 'chat-reply',
+          payload: { text: 'Sorry, I encountered an error processing your message.' }
+        });
+      }
+    } catch (error) {
+      console.error('Error handling chat message:', error);
+      
+      // Send error response
+      this.bus.publish({
+        ts: Date.now(),
+        type: 'chat-reply',
+        payload: { text: 'Sorry, I encountered an error processing your message.' }
+      });
+    }
   }
 }
 

@@ -131,8 +131,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children, ws }) =>
         const eventData: ChimeraEvent = JSON.parse(event.data);
         setEvents(prev => [...prev, eventData]);
 
+        // Handle chat reply events
+        if (eventData.type === 'chat-reply' && eventData.payload?.text) {
+          addChatMessage({ text: eventData.payload.text, sender: 'kernel' });
+        }
         // If this is a KERNEL log event, add it to chat
-        if (eventData.type === 'log' && eventData.payload?.agent === 'KERNEL') {
+        else if (eventData.type === 'log' && eventData.payload?.agent === 'KERNEL') {
           const text = eventData.payload.text || eventData.payload.message || JSON.stringify(eventData.payload);
           addChatMessage({ text, sender: 'kernel' });
         }
