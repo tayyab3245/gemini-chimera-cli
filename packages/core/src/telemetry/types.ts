@@ -63,19 +63,22 @@ export class StartSessionEvent {
     this['event.name'] = 'cli_config';
     this.model = config.getModel();
     this.embedding_model = config.getEmbeddingModel();
-    this.sandbox_enabled =
-      typeof config.getSandbox() === 'string' || !!config.getSandbox();
+    this.sandbox_enabled = Boolean(
+      typeof config.getSandbox() === 'string' || !!config.getSandbox()
+    );
     this.core_tools_enabled = (config.getCoreTools() ?? []).join(',');
     this.approval_mode = config.getApprovalMode();
-    this.api_key_enabled = useGemini || useVertex;
-    this.vertex_ai_enabled = useVertex;
-    this.debug_enabled = config.getDebugMode();
+    this.api_key_enabled = Boolean(useGemini || useVertex);
+    this.vertex_ai_enabled = Boolean(useVertex);
+    this.debug_enabled = Boolean(config.getDebugMode());
     this.mcp_servers = mcpServers ? Object.keys(mcpServers).join(',') : '';
-    this.telemetry_enabled = config.getTelemetryEnabled();
-    this.telemetry_log_user_prompts_enabled =
-      config.getTelemetryLogPromptsEnabled();
-    this.file_filtering_respect_git_ignore =
-      config.getFileFilteringRespectGitIgnore();
+    this.telemetry_enabled = Boolean(config.getTelemetryEnabled());
+    this.telemetry_log_user_prompts_enabled = Boolean(
+      config.getTelemetryLogPromptsEnabled()
+    );
+    this.file_filtering_respect_git_ignore = Boolean(
+      config.getFileFilteringRespectGitIgnore()
+    );
   }
 }
 

@@ -230,7 +230,7 @@ export class ClearcutLogger {
       },
       {
         gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_SANDBOX,
-        value: event.sandbox_enabled.toString(),
+        value: (event.sandbox_enabled ?? false).toString(),
       },
       {
         gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_CORE_TOOLS,
@@ -243,22 +243,22 @@ export class ClearcutLogger {
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_API_KEY_ENABLED,
-        value: event.api_key_enabled.toString(),
+        value: (event.api_key_enabled ?? false).toString(),
       },
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_VERTEX_API_ENABLED,
-        value: event.vertex_ai_enabled.toString(),
+        value: (event.vertex_ai_enabled ?? false).toString(),
       },
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_DEBUG_MODE_ENABLED,
-        value: event.debug_enabled.toString(),
+        value: (event.debug_enabled ?? false).toString(),
       },
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_VERTEX_API_ENABLED,
-        value: event.vertex_ai_enabled.toString(),
+        value: (event.vertex_ai_enabled ?? false).toString(),
       },
       {
         gemini_cli_key: EventMetadataKey.GEMINI_CLI_START_SESSION_MCP_SERVERS,
@@ -267,17 +267,17 @@ export class ClearcutLogger {
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_VERTEX_API_ENABLED,
-        value: event.vertex_ai_enabled.toString(),
+        value: (event.vertex_ai_enabled ?? false).toString(),
       },
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_TELEMETRY_ENABLED,
-        value: event.telemetry_enabled.toString(),
+        value: (event.telemetry_enabled ?? false).toString(),
       },
       {
         gemini_cli_key:
           EventMetadataKey.GEMINI_CLI_START_SESSION_TELEMETRY_LOG_USER_PROMPTS_ENABLED,
-        value: event.telemetry_log_user_prompts_enabled.toString(),
+        value: (event.telemetry_log_user_prompts_enabled ?? false).toString(),
       },
       {
         gemini_cli_key: EventMetadataKey.GEMINI_CLI_SURFACE,
