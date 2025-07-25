@@ -80,7 +80,7 @@ export class ClearcutLogger {
     const totalAccounts = getLifetimeGoogleAccounts();
     data.push({
       gemini_cli_key: EventMetadataKey.GEMINI_CLI_GOOGLE_ACCOUNTS_COUNT,
-      value: totalAccounts.toString(),
+      value: (totalAccounts ?? 0).toString(),
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

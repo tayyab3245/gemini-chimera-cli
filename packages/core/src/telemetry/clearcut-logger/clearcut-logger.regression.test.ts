@@ -89,4 +89,36 @@ describe('ClearcutLogger regression tests', () => {
     const logger = ClearcutLogger.getInstance(mockConfig);
     expect(logger).toBeUndefined();
   });
+
+  it('should handle undefined totalAccounts from getLifetimeGoogleAccounts gracefully', () => {
+    // Mock getLifetimeGoogleAccounts to return undefined
+    vi.mock('../../utils/user_account.js', () => ({
+      getCachedGoogleAccount: () => 'test@example.com',
+      getLifetimeGoogleAccounts: () => undefined,
+    }));
+
+    const mockConfig = {
+      getUsageStatisticsEnabled: () => true,
+      getSessionId: () => 'test-session',
+      getModel: () => 'test-model',
+      getEmbeddingModel: () => 'test-embedding',
+      getSandbox: () => false,
+      getCoreTools: () => [],
+      getApprovalMode: () => 'auto',
+      getDebugMode: () => false,
+      getMcpServers: () => null,
+      getTelemetryEnabled: () => true,
+      getTelemetryLogPromptsEnabled: () => true,
+      getFileFilteringRespectGitIgnore: () => true,
+      getContentGeneratorConfig: () => null,
+    } as unknown as Config;
+
+    const event = new StartSessionEvent(mockConfig);
+    const logger = ClearcutLogger.getInstance(mockConfig);
+
+    // This should not throw even if getLifetimeGoogleAccounts returns undefined
+    expect(() => {
+      logger?.logStartSessionEvent(event);
+    }).not.toThrow();
+  });
 });
