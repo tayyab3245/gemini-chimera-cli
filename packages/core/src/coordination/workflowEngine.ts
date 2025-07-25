@@ -89,10 +89,22 @@ export class WorkflowEngine {
 
     try {
       // Execute agent with retry and timeout logic
-      await withRetries(
+      const result = await withRetries(
         () => withTimeout(this.executeAgent(agentKind, fullContext), 60_000),
         3
       );
+
+      // Update fullContext with agent outputs
+      if (agentKind === 'KERNEL' && result.output) {
+        fullContext.clarifiedUserInput = result.output;
+        
+        // Log context slice preparation for SYNTH
+        this.bus.publish({
+          ts: Date.now(),
+          type: 'log',
+          payload: 'Context slice prepared for SYNTH'
+        });
+      }
     } catch (error) {
       // Publish error event on final failure
       this.bus.publish({
@@ -115,7 +127,7 @@ export class WorkflowEngine {
     });
   }
 
-  private async executeAgent(agentKind: AgentKind, fullContext: BaseContext): Promise<void> {
+  private async executeAgent(agentKind: AgentKind, fullContext: BaseContext): Promise<any> {
     // Build context slice for the specific agent
     const contextSlice = buildContextSlice(agentKind, fullContext);
     const agentContext: AgentContext<any> = {
@@ -150,8 +162,7 @@ export class WorkflowEngine {
       throw new Error(result.error || `Agent ${agentKind} execution failed`);
     }
 
-    // Update fullContext with any outputs (for future implementation)
-    // This is where we would merge agent outputs back into the full context
+    return result;
   }
 
   /**

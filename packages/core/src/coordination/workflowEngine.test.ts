@@ -135,6 +135,53 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       );
     });
+
+    it('should route Kernel output through ContextBroker to SYNTH', async () => {
+      // Mock KernelAgent to return a result with output
+      const mockKernelRun = vi.fn().mockResolvedValue({
+        ok: true,
+        output: 'Create a Node.js app' // This will be the clarified input
+      });
+      
+      vi.mocked(KernelAgent).mockImplementation(() => ({
+        run: mockKernelRun
+      }) as any);
+
+      // Mock SynthAgent to capture the context it receives
+      let synthReceivedContext: any = null;
+      const mockSynthRun = vi.fn().mockImplementation(async (ctx: any) => {
+        synthReceivedContext = ctx.input;
+        return { ok: true };
+      });
+      
+      vi.mocked(SynthAgent).mockImplementation(() => ({
+        run: mockSynthRun
+      }) as any);
+
+      // Create new engine and run workflow
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
+      await engine.run('Build me a Node.js application with Express');
+
+      // Verify that context slice preparation log was published
+      expect(publishedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'log',
+          payload: 'Context slice prepared for SYNTH'
+        })
+      );
+
+      // Verify that SYNTH received the clarified input from Kernel
+      expect(synthReceivedContext).toEqual(
+        expect.objectContaining({
+          userInput: 'Create a Node.js app', // This should be the clarified input
+          planJson: '{}'
+        })
+      );
+
+      // Verify that forbidden fields like artifacts are absent from SYNTH context
+      expect(synthReceivedContext).not.toHaveProperty('artifacts');
+      expect(synthReceivedContext).not.toHaveProperty('planStep');
+    });
   });
 
   describe('Retry functionality', () => {
