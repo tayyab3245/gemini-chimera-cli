@@ -9,6 +9,7 @@ import { KernelAgent } from './kernel.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
 import type { AgentContext } from './agent.js';
+import type { GeminiChat } from '../core/geminiChat.js';
 import * as broker from '../context/broker.js';
 
 // Mock the context broker
@@ -19,13 +20,20 @@ vi.mock('../context/broker.js', () => ({
 describe('KernelAgent', () => {
   let kernelAgent: KernelAgent;
   let mockBus: ChimeraEventBus;
+  let mockGeminiChat: GeminiChat;
   let publishSpy: Mock;
   let buildContextSliceMock: Mock;
 
   beforeEach(() => {
     mockBus = new ChimeraEventBus();
     publishSpy = vi.spyOn(mockBus, 'publish') as Mock;
-    kernelAgent = new KernelAgent(mockBus);
+    
+    // Create mock GeminiChat
+    mockGeminiChat = {
+      sendMessage: vi.fn().mockResolvedValue({ text: () => 'ACK' })
+    } as any;
+    
+    kernelAgent = new KernelAgent(mockBus, mockGeminiChat);
     buildContextSliceMock = vi.mocked(broker.buildContextSlice);
     buildContextSliceMock.mockClear();
     publishSpy.mockClear();

@@ -2,6 +2,7 @@ import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
 import type { AgentContext, AgentResult } from './agent.js';
 import { buildContextSlice } from '../context/broker.js';
+import type { GeminiChat } from '../core/geminiChat.js';
 
 interface KernelOutput {
   clarifiedUserInput: string;          // concise requirement sentence
@@ -12,7 +13,7 @@ interface KernelOutput {
 export class KernelAgent {
   readonly id = AgentType.KERNEL;
 
-  constructor(private bus: ChimeraEventBus) {}
+  constructor(private bus: ChimeraEventBus, private geminiChat: GeminiChat) {}
 
   async run(ctx: AgentContext<{ userInput: string }>): Promise<AgentResult<KernelOutput>> {
     this.bus.publish({ ts: Date.now(), type: 'agent-start', payload: { id: this.id }});

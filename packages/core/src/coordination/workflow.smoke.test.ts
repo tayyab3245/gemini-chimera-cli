@@ -1,5 +1,5 @@
 // packages/core/src/coordination/workflow.smoke.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WorkflowEngine } from './workflowEngine.js';
 import { WorkflowState, advance } from './workflow.js';
 import { AuditAgent } from '../agents/audit.js';
@@ -10,6 +10,7 @@ import { ToolRegistry } from '../tools/tool-registry.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { Config } from '../config/config.js';
 import type { PlanStatus } from '../interfaces/chimera.js';
+import type { GeminiChat } from '../core/geminiChat.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -18,6 +19,7 @@ describe('Workflow Smoke Tests', () => {
   let engine: WorkflowEngine;
   let bus: ChimeraEventBus;
   let toolRegistry: ToolRegistry;
+  let mockGeminiChat: GeminiChat;
   
   beforeEach(() => {
     bus = new ChimeraEventBus();
@@ -28,7 +30,13 @@ describe('Workflow Smoke Tests', () => {
     toolRegistry = new ToolRegistry(config);
     const writeFileTool = new WriteFileTool(config);
     toolRegistry.registerTool(writeFileTool);
-    engine = new WorkflowEngine(bus, toolRegistry);
+    
+    // Create mock GeminiChat
+    mockGeminiChat = {
+      sendMessage: vi.fn().mockResolvedValue({ text: () => 'ACK' })
+    } as any;
+    
+    engine = new WorkflowEngine(bus, mockGeminiChat, toolRegistry);
   });
 
   it('should complete basic workflow with valid input', async () => {

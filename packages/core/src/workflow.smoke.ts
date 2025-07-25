@@ -10,6 +10,7 @@ import { SynthAgent } from './agents/synth.js';
 import { DriveAgent } from './agents/drive.js';
 import { AuditAgent } from './agents/audit.js';
 import type { AgentContext } from './agents/agent.js';
+import type { GeminiChat } from './core/geminiChat.js';
 
 async function runSmokeTest() {
   console.log('🧪 Starting Chimera workflow smoke test...');
@@ -17,8 +18,13 @@ async function runSmokeTest() {
   // 1. Instantiate ChimeraEventBus
   const bus = new ChimeraEventBus();
 
-  // 2. Create agents with the bus
-  const kernel = new KernelAgent(bus);
+  // 2. Create mock GeminiChat for dependency injection
+  const mockGeminiChat = {
+    sendMessage: async () => ({ text: () => 'ACK' })
+  } as unknown as GeminiChat;
+
+  // 3. Create agents with the bus and dependencies
+  const kernel = new KernelAgent(bus, mockGeminiChat);
   const synth = new SynthAgent(bus);
   const drive = new DriveAgent(bus);
   const audit = new AuditAgent(bus);

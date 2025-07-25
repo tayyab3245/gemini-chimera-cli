@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChimeraEventBus } from '../event-bus/bus.js';
 import { WorkflowEngine } from './workflowEngine.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
+import type { GeminiChat } from '../core/geminiChat.js';
 
 // Mock the agent modules before importing them
 vi.mock('../agents/kernel.js', () => ({
@@ -31,6 +32,7 @@ describe('WorkflowEngine Integration Tests', () => {
   let bus: ChimeraEventBus;
   let engine: WorkflowEngine;
   let mockToolRegistry: ToolRegistry;
+  let mockGeminiChat: GeminiChat;
   let publishedEvents: any[];
 
   beforeEach(() => {
@@ -76,7 +78,12 @@ describe('WorkflowEngine Integration Tests', () => {
       run: vi.fn().mockResolvedValue({ ok: true })
     }) as any);
 
-    engine = new WorkflowEngine(bus, mockToolRegistry);
+    // Create mock GeminiChat
+    mockGeminiChat = {
+      sendMessage: vi.fn().mockResolvedValue({ text: () => 'ACK' })
+    } as any;
+
+    engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
   });
 
   describe('Successful workflow execution', () => {
@@ -112,7 +119,7 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       }) as any);
 
-      engine = new WorkflowEngine(bus, mockToolRegistry);
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       await engine.run('test input');
 
       // Verify DriveAgent was called 3 times (1 initial + 2 retries)
@@ -132,7 +139,7 @@ describe('WorkflowEngine Integration Tests', () => {
         run: vi.fn().mockRejectedValue(new Error('Synth permanently failed'))
       }) as any);
 
-      engine = new WorkflowEngine(bus, mockToolRegistry);
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       
       await expect(engine.run('test input')).rejects.toThrow('Synth permanently failed');
 
@@ -166,7 +173,7 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       }) as any);
 
-      engine = new WorkflowEngine(bus, mockToolRegistry);
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       await engine.run('test input');
 
       // Verify ToolRegistry was injected into DriveAgent context
@@ -196,7 +203,7 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       }) as any);
 
-      engine = new WorkflowEngine(bus, mockToolRegistry);
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       await engine.run('test input');
 
       // Verify progress events were emitted
@@ -229,7 +236,7 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       }) as any);
 
-      engine = new WorkflowEngine(bus, mockToolRegistry);
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       await engine.run('test input');
 
       // Verify tool registry was used
@@ -248,7 +255,7 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       }) as any);
 
-      engine = new WorkflowEngine(bus, mockToolRegistry);
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       
       await expect(engine.run('test input')).rejects.toThrow('Kernel processing failed');
 

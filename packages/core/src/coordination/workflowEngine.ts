@@ -10,6 +10,7 @@ import { DriveAgent } from '../agents/drive.js';
 import { AuditAgent } from '../agents/audit.js';
 import type { AgentContext } from '../agents/agent.js';
 import type { ToolRegistry } from '../tools/tool-registry.js';
+import type { GeminiChat } from '../core/geminiChat.js';
 
 export class WorkflowEngine {
   private stateMachine: WorkflowStateMachine;
@@ -18,9 +19,9 @@ export class WorkflowEngine {
   private drive: DriveAgent;
   private audit: AuditAgent;
 
-  constructor(private bus: ChimeraEventBus, private toolRegistry?: ToolRegistry) {
+  constructor(private bus: ChimeraEventBus, private geminiChat: GeminiChat, private toolRegistry?: ToolRegistry) {
     this.stateMachine = new WorkflowStateMachine(bus);
-    this.kernel = new KernelAgent(bus);
+    this.kernel = new KernelAgent(bus, geminiChat);
     this.synth = new SynthAgent(bus);
     this.drive = new DriveAgent(bus);
     this.audit = new AuditAgent(bus);
@@ -163,7 +164,9 @@ if (typeof import.meta.vitest !== 'undefined') {
       history: () => [],
     } as unknown as ChimeraEventBus;
 
-    const engine = new WorkflowEngine(mockBus);
+    const mockGeminiChat = {} as unknown as GeminiChat;
+
+    const engine = new WorkflowEngine(mockBus, mockGeminiChat);
     await engine.run('test input');
 
     // Extract event payloads for easier testing
