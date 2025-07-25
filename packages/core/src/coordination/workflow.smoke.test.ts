@@ -50,12 +50,12 @@ describe('Workflow Smoke Tests', () => {
     // now returns consultant rewrite instead of parsed requirements
     await expect(engine.run(detailedInput)).rejects.toThrow(/Planning failed/);
     
-    // Verify that GeminiChat was called for consultant rewrite
+    // Verify that GeminiChat was called for consultant analysis (using fallback prompt)
     expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("Rewrite the user request as one short (< 50 chars) task sentence")
+        message: expect.stringContaining("Rewrite user request in ≤50 chars.")
       }),
-      "kernel-consultant-rewrite"
+      "kernel-consultant-analysis"
     );
   });
 
@@ -92,12 +92,12 @@ describe('Workflow Smoke Tests', () => {
     // Check that we get workflow-start event
     expect(events).toContain('workflow-start');
     
-    // Verify that GeminiChat was called for consultant rewrite
+    // Verify that GeminiChat was called for consultant analysis (using fallback prompt)
     expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("Rewrite the user request as one short (< 50 chars) task sentence")
+        message: expect.stringContaining("Rewrite user request in ≤50 chars.")
       }),
-      "kernel-consultant-rewrite"
+      "kernel-consultant-analysis"
     );
   });
 

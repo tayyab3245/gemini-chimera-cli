@@ -1,4 +1,4 @@
-export type ChimeraEventType = 'log' | 'progress' | 'agent-start' | 'agent-end' | 'error' | 'chat-message' | 'chat-reply';
+export type ChimeraEventType = 'log' | 'progress' | 'agent-start' | 'agent-end' | 'error' | 'chat-message' | 'chat-reply' | 'agent-followup';
 
 export interface ChimeraEvent<T = unknown> {
   ts: number;
