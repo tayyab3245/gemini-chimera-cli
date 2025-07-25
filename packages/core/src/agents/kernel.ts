@@ -19,24 +19,28 @@ export class KernelAgent {
     this.bus.publish({ ts: Date.now(), type: 'agent-start', payload: { id: this.id }});
     
     try {
-      // Progress: 25% - Starting ACK handshake
+      // Progress: 25% - Starting consultant analysis
       this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 25 } });
-      this.bus.publish({ ts: Date.now(), type: 'log', payload: `${this.id} performing ACK handshake` });
+      this.bus.publish({ ts: Date.now(), type: 'log', payload: `${this.id} analyzing user request` });
 
-      // Progress: 50% - Calling GeminiChat
+      // Progress: 50% - Calling GeminiChat for consultant rewrite
       this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 50 } });
       
-      // Perform ACK handshake with GeminiChat if available
+      // Use AI-as-Consultant prompt to rewrite user input
       if (this.geminiChat) {
-        const ackResponse = await this.geminiChat.sendMessage(
-          { message: "Respond with only the word 'ACK'." },
-          "kernel-ack-handshake"
+        const consultantPrompt = `Rewrite the user request as one short (< 50 chars) task sentence. Return **only** that sentence.
+
+User request: "${ctx.input.userInput}"`;
+
+        const consultantResponse = await this.geminiChat.sendMessage(
+          { message: consultantPrompt },
+          "kernel-consultant-rewrite"
         );
         
-        // Extract ACK text from response
-        let ackText = 'ACK'; // default fallback
-        if (ackResponse?.candidates?.[0]?.content?.parts) {
-          ackText = ackResponse.candidates[0].content.parts
+        // Extract rewritten task sentence from response
+        let taskSentence = 'Process user request'; // default fallback
+        if (consultantResponse?.candidates?.[0]?.content?.parts) {
+          taskSentence = consultantResponse.candidates[0].content.parts
             .map((part: any) => part.text)
             .join('')
             .trim();
@@ -44,21 +48,22 @@ export class KernelAgent {
         
         // Progress: 100% - Complete
         this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
-        this.bus.publish({ ts: Date.now(), type: 'log', payload: `${this.id} ACK handshake successful` });
+        this.bus.publish({ ts: Date.now(), type: 'log', payload: taskSentence });
         this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id }});
         
-        return { ok: true, output: ackText };
+        return { ok: true, output: taskSentence };
       } else {
-        // Fallback: return simple ACK without GeminiChat
+        // Fallback: return simple task description without GeminiChat
+        const fallbackTask = 'Process user request';
         this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 100 } });
-        this.bus.publish({ ts: Date.now(), type: 'log', payload: `${this.id} returning simple ACK (no GeminiChat)` });
+        this.bus.publish({ ts: Date.now(), type: 'log', payload: fallbackTask });
         this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id }});
         
-        return { ok: true, output: 'ACK' };
+        return { ok: true, output: fallbackTask };
       }
       
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error during ACK handshake';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during consultant analysis';
       this.bus.publish({ 
         ts: Date.now(), 
         type: 'error', 

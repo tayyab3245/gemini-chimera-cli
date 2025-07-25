@@ -47,13 +47,15 @@ describe('Workflow Smoke Tests', () => {
     const detailedInput = 'Create a comprehensive Node.js application with TypeScript that implements a RESTful API for managing user accounts, including authentication, data validation, error handling, and proper database integration using PostgreSQL';
     
     // The workflow will fail at the SYNTH stage because the KERNEL agent
-    // now returns "ACK" instead of parsed requirements
+    // now returns consultant rewrite instead of parsed requirements
     await expect(engine.run(detailedInput)).rejects.toThrow(/Planning failed/);
     
-    // Verify that GeminiChat was called for the ACK handshake
+    // Verify that GeminiChat was called for consultant rewrite
     expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
-      { message: "Respond with only the word 'ACK'." },
-      "kernel-ack-handshake"
+      expect.objectContaining({
+        message: expect.stringContaining("Rewrite the user request as one short (< 50 chars) task sentence")
+      }),
+      "kernel-consultant-rewrite"
     );
   });
 
@@ -90,10 +92,12 @@ describe('Workflow Smoke Tests', () => {
     // Check that we get workflow-start event
     expect(events).toContain('workflow-start');
     
-    // Verify that GeminiChat was called for the ACK handshake
+    // Verify that GeminiChat was called for consultant rewrite
     expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
-      { message: "Respond with only the word 'ACK'." },
-      "kernel-ack-handshake"
+      expect.objectContaining({
+        message: expect.stringContaining("Rewrite the user request as one short (< 50 chars) task sentence")
+      }),
+      "kernel-consultant-rewrite"
     );
   });
 

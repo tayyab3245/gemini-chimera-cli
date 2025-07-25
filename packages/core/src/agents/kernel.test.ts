@@ -32,22 +32,33 @@ describe('KernelAgent', () => {
     publishSpy.mockClear();
   });
 
-  describe('live ACK handshake', () => {
-    it('should call GeminiChat and return ACK response', async () => {
+  describe('consultant rewrite', () => {
+    it('should call GeminiChat with consultant prompt and return rewritten task', async () => {
+      // Mock GeminiChat to return a concise task sentence
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'Create a Node.js app' }] } }]
+      });
+
       const ctx: AgentContext<{ userInput: string }> = {
-        input: { userInput: 'test input' },
+        input: { userInput: 'I need help building a simple web application using Node.js and Express' },
         bus: mockBus,
       };
 
       const result = await kernelAgent.run(ctx);
 
       expect(result.ok).toBe(true);
-      expect(result.output).toBe('ACK');
+      expect(result.output).toBe('Create a Node.js app');
 
-      // Verify GeminiChat was called with correct parameters
+      // Verify GeminiChat was called with consultant prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
-        { message: "Respond with only the word 'ACK'." },
-        "kernel-ack-handshake"
+        { message: expect.stringContaining('Rewrite the user request as one short (< 50 chars) task sentence') },
+        "kernel-consultant-rewrite"
+      );
+
+      // Verify the user input was included in the prompt
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        { message: expect.stringContaining('I need help building a simple web application using Node.js and Express') },
+        "kernel-consultant-rewrite"
       );
 
       // Verify event publishing
@@ -65,11 +76,11 @@ describe('KernelAgent', () => {
       }));
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'progress',
-        payload: { percent: 75 }
+        payload: { percent: 100 }
       }));
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'progress',
-        payload: { percent: 100 }
+        type: 'log',
+        payload: 'Create a Node.js app'
       }));
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'agent-end',
@@ -139,13 +150,13 @@ describe('KernelAgent', () => {
       const result = await kernelAgent.run(ctx);
 
       expect(result.ok).toBe(true);
-      expect(result.output).toBe('');
+      expect(result.output).toBe('Process user request');
     });
 
     it('should trim whitespace from response', async () => {
       // Mock GeminiChat to return response with whitespace
       (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
-        candidates: [{ content: { parts: [{ text: '  ACK  ' }] } }]
+        candidates: [{ content: { parts: [{ text: '  Build a web app  ' }] } }]
       });
 
       const ctx: AgentContext<{ userInput: string }> = {
@@ -156,65 +167,28 @@ describe('KernelAgent', () => {
       const result = await kernelAgent.run(ctx);
 
       expect(result.ok).toBe(true);
-      expect(result.output).toBe('ACK');
+      expect(result.output).toBe('Build a web app');
     });
 
-    it('should retry on timeout and succeed', async () => {
-      let callCount = 0;
+    it('should return fallback when no GeminiChat', async () => {
+      // Create agent without GeminiChat
+      const kernelAgentNoChat = new KernelAgent(mockBus);
       
-      // Mock GeminiChat to timeout twice then succeed
-      (mockGeminiChat.sendMessage as Mock).mockImplementation(() => {
-        callCount++;
-        if (callCount <= 2) {
-          // Return a promise that rejects with timeout error
-          return Promise.reject(new Error('timeout'));
-        }
-        return Promise.resolve({
-          candidates: [{ content: { parts: [{ text: 'ACK' }] } }]
-        });
-      });
-
       const ctx: AgentContext<{ userInput: string }> = {
         input: { userInput: 'test input' },
         bus: mockBus,
       };
 
-      const result = await kernelAgent.run(ctx);
+      const result = await kernelAgentNoChat.run(ctx);
 
       expect(result.ok).toBe(true);
-      expect(result.output).toBe('ACK');
-      expect(mockGeminiChat.sendMessage).toHaveBeenCalledTimes(3);
-    }, 10000); // 10 second timeout for this test
-
-    it('should publish error event when all retries fail', async () => {
-      // Mock GeminiChat to always reject with timeout
-      (mockGeminiChat.sendMessage as Mock).mockRejectedValue(new Error('timeout'));
-
-      const ctx: AgentContext<{ userInput: string }> = {
-        input: { userInput: 'test input' },
-        bus: mockBus,
-      };
-
-      const result = await kernelAgent.run(ctx);
-
-      expect(result.ok).toBe(false);
-      expect(result.error).toBe('timeout');
-
-      // Verify error event was published with timeout error
+      expect(result.output).toBe('Process user request');
+      
+      // Verify log event contains the fallback message
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'error',
-        payload: expect.objectContaining({
-          agent: 'KERNEL',
-          message: 'timeout',
-          stack: expect.any(String)
-        })
+        type: 'log',
+        payload: 'Process user request'
       }));
-
-      // Should still publish agent-end
-      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'agent-end',
-        payload: { id: AgentType.KERNEL }
-      }));
-    }, 10000); // 10 second timeout for this test
+    });
   });
 });

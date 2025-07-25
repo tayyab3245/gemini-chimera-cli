@@ -81,7 +81,7 @@ describe('WorkflowEngine Integration Tests', () => {
     // Create mock GeminiChat with correct response structure
     mockGeminiChat = {
       sendMessage: vi.fn().mockResolvedValue({
-        candidates: [{ content: { parts: [{ text: 'ACK' }] } }]
+        candidates: [{ content: { parts: [{ text: 'Create a Node.js app' }] } }]
       })
     } as any;
 
@@ -107,23 +107,25 @@ describe('WorkflowEngine Integration Tests', () => {
       );
     });
 
-    it('should pass ACK response from KernelAgent through WorkflowEngine', async () => {
-      // Mock KernelAgent to return ACK (as it should with real GeminiChat)
-      const mockKernelRun = vi.fn().mockResolvedValue({ 
-        ok: true, 
-        output: 'ACK' 
-      });
+    it('should execute consultant workflow through WorkflowEngine', async () => {
+      // Note: This test runs with mocked agents but verifies the consultant workflow structure
       
-      vi.mocked(KernelAgent).mockImplementation(() => ({
-        run: mockKernelRun
-      }) as any);
+      await engine.run('Build me a basic Node.js application with Express');
 
-      // Create new engine with updated mock
-      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
-      await engine.run('test input');
+      // Verify that KernelAgent was executed (even if mocked)
+      expect(publishedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'log',
+          payload: 'agent-start-KERNEL'
+        })
+      );
 
-      // Verify that KernelAgent run method was called
-      expect(mockKernelRun).toHaveBeenCalled();
+      expect(publishedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'log',
+          payload: 'agent-end-KERNEL'
+        })
+      );
 
       // Verify workflow completed successfully
       expect(publishedEvents).toContainEqual(
