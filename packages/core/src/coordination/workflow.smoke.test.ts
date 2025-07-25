@@ -31,22 +31,30 @@ describe('Workflow Smoke Tests', () => {
     const writeFileTool = new WriteFileTool(config);
     toolRegistry.registerTool(writeFileTool);
     
-    // Create mock GeminiChat
+    // Create mock GeminiChat with correct response structure
     mockGeminiChat = {
-      sendMessage: vi.fn().mockResolvedValue({ text: () => 'ACK' })
+      sendMessage: vi.fn().mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'ACK' }] } }]
+      })
     } as any;
     
     engine = new WorkflowEngine(bus, mockGeminiChat, toolRegistry);
   });
 
   it('should complete basic workflow with valid input', async () => {
-    // Note: This is a limited test since the workflow context passing isn't fully implemented
-    // For now, we test that the workflow starts without crashing
+    // Note: Since KernelAgent now returns simple "ACK" response, 
+    // the workflow will fail at the SYNTH stage due to insufficient context
     const detailedInput = 'Create a comprehensive Node.js application with TypeScript that implements a RESTful API for managing user accounts, including authentication, data validation, error handling, and proper database integration using PostgreSQL';
     
-    // The workflow will fail at the SYNTH stage due to incomplete context passing,
-    // but we can at least verify the KERNEL stage works
+    // The workflow will fail at the SYNTH stage because the KERNEL agent
+    // now returns "ACK" instead of parsed requirements
     await expect(engine.run(detailedInput)).rejects.toThrow(/Planning failed/);
+    
+    // Verify that GeminiChat was called for the ACK handshake
+    expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+      { message: "Respond with only the word 'ACK'." },
+      "kernel-ack-handshake"
+    );
   });
 
   it('should handle state transitions correctly', () => {
@@ -69,18 +77,24 @@ describe('Workflow Smoke Tests', () => {
       events.push(event.payload);
     });
 
-    // Provide a detailed input that passes the KERNEL agent's validation (>15 words)
+    // Provide input for the ACK handshake test
     const detailedInput = 'Build a modern web application using React and Express that handles user authentication, data management, real-time notifications, responsive design, and comprehensive testing with proper deployment configuration';
     
-    // The workflow will fail at the SYNTH stage, but we should still get workflow-start
+    // The workflow will fail at the SYNTH stage due to ACK response not containing planning data
     try {
       await engine.run(detailedInput);
     } catch (error) {
-      // Expected to fail due to incomplete context passing
+      // Expected to fail because KernelAgent returns "ACK" instead of planning data
     }
 
-    // Check that we get workflow-start event (workflow-complete won't be emitted due to failure)
+    // Check that we get workflow-start event
     expect(events).toContain('workflow-start');
+    
+    // Verify that GeminiChat was called for the ACK handshake
+    expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+      { message: "Respond with only the word 'ACK'." },
+      "kernel-ack-handshake"
+    );
   });
 
   describe('AuditAgent Integration', () => {
