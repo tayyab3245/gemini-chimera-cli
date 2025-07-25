@@ -101,21 +101,18 @@ describe('Recovery utilities', () => {
 
   describe('Integration: withRetries + withTimeout', () => {
     it('should throw timeout error when all attempts timeout', async () => {
-      vi.useFakeTimers();
-      
       const mockFn = vi.fn()
-        .mockImplementation(() => new Promise(() => {})); // never resolves
+        .mockImplementation(() => new Promise(resolve => setTimeout(resolve, 200))); // always times out
       
-      const promise = withRetries(() => withTimeout(mockFn(), 100), 2, 50);
+      const startTime = Date.now();
       
-      // Let all timeouts and retries run
-      vi.advanceTimersByTime(1000);
-      await vi.runAllTimersAsync();
+      await expect(
+        withRetries(() => withTimeout(mockFn(), 100), 2, 10)
+      ).rejects.toThrow('timeout');
       
-      await expect(promise).rejects.toThrow('timeout');
+      const elapsed = Date.now() - startTime;
+      expect(elapsed).toBeGreaterThan(300); // Should take at least 3 timeouts * 100ms
       expect(mockFn).toHaveBeenCalledTimes(3); // max=2 means 3 attempts
-      
-      vi.useRealTimers();
     });
   });
 });
