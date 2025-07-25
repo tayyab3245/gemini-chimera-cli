@@ -91,13 +91,14 @@ describe('KernelAgent', () => {
       expect(result.ok).toBe(false);
       expect(result.error).toBe('API failure');
 
-      // Verify error event was published
+      // Verify error event was published with stack trace
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'error',
-        payload: {
+        payload: expect.objectContaining({
           agent: 'KERNEL',
-          message: 'API failure'
-        }
+          message: 'API failure',
+          stack: expect.any(String)
+        })
       }));
 
       // Should still publish agent-end
@@ -157,5 +158,63 @@ describe('KernelAgent', () => {
       expect(result.ok).toBe(true);
       expect(result.output).toBe('ACK');
     });
+
+    it('should retry on timeout and succeed', async () => {
+      let callCount = 0;
+      
+      // Mock GeminiChat to timeout twice then succeed
+      (mockGeminiChat.sendMessage as Mock).mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          // Return a promise that rejects with timeout error
+          return Promise.reject(new Error('timeout'));
+        }
+        return Promise.resolve({
+          candidates: [{ content: { parts: [{ text: 'ACK' }] } }]
+        });
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'test input' },
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('ACK');
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledTimes(3);
+    }, 10000); // 10 second timeout for this test
+
+    it('should publish error event when all retries fail', async () => {
+      // Mock GeminiChat to always reject with timeout
+      (mockGeminiChat.sendMessage as Mock).mockRejectedValue(new Error('timeout'));
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'test input' },
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('timeout');
+
+      // Verify error event was published with timeout error
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'error',
+        payload: expect.objectContaining({
+          agent: 'KERNEL',
+          message: 'timeout',
+          stack: expect.any(String)
+        })
+      }));
+
+      // Should still publish agent-end
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-end',
+        payload: { id: AgentType.KERNEL }
+      }));
+    }, 10000); // 10 second timeout for this test
   });
 });

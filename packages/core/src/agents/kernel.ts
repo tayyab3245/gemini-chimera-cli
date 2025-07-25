@@ -2,6 +2,7 @@ import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
 import type { AgentContext, AgentResult } from './agent.js';
 import type { GeminiChat } from '../core/geminiChat.js';
+import { withTimeout, withRetries } from '../coordination/recovery.js';
 
 export class KernelAgent {
   readonly id = AgentType.KERNEL;
@@ -23,11 +24,16 @@ export class KernelAgent {
       // Progress: 75% - Processing response
       this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 75 } });
       
-      // Call GeminiChat with the hard-coded prompt
-      const response = await this.geminiChat.sendMessage(
-        { message: "Respond with only the word 'ACK'." },
-        "kernel-ack-handshake"
-      );
+      // Call GeminiChat with the hard-coded prompt wrapped in timeout and retries
+      const response = await withRetries(async () => {
+        return await withTimeout(
+          this.geminiChat.sendMessage(
+            { message: "Respond with only the word 'ACK'." },
+            "kernel-ack-handshake"
+          ),
+          60_000
+        );
+      }, 3);
       
       // Extract text from response
       const responseText = response.candidates?.[0]?.content?.parts?.map((part) => part.text).join('') || '';
@@ -43,7 +49,17 @@ export class KernelAgent {
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error during kernel processing';
-      this.bus.publish({ ts: Date.now(), type: 'error', payload: { agent: 'KERNEL' as any, message: errorMessage } });
+      const stack = error instanceof Error ? error.stack : undefined;
+      
+      this.bus.publish({ 
+        ts: Date.now(), 
+        type: 'error', 
+        payload: { 
+          agent: 'KERNEL' as any, 
+          message: errorMessage,
+          stack
+        } 
+      });
       this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id }});
       
       return { ok: false, error: errorMessage };

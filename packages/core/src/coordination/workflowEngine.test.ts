@@ -183,6 +183,42 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       );
     });
+
+    it('should publish structured error event when KernelAgent fails with timeout', async () => {
+      // Mock KernelAgent to simulate timeout failure
+      vi.mocked(KernelAgent).mockImplementation(() => ({
+        run: vi.fn().mockImplementation(async () => {
+          // Simulate the actual error that would be published by KernelAgent
+          const error = new Error('timeout');
+          bus.publish({ 
+            ts: Date.now(), 
+            type: 'error', 
+            payload: { 
+              agent: 'KERNEL', 
+              message: 'timeout',
+              stack: error.stack
+            } 
+          });
+          return { ok: false, error: 'timeout' };
+        })
+      }) as any);
+
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
+      
+      await expect(engine.run('test input')).rejects.toThrow();
+
+      // Verify structured error event was published with timeout, message, and stack
+      expect(publishedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          payload: expect.objectContaining({
+            agent: 'KERNEL',
+            message: 'timeout',
+            stack: expect.any(String)
+          })
+        })
+      );
+    });
   });
 
   describe('P3.12-DRIVE: ToolRegistry Integration', () => {
