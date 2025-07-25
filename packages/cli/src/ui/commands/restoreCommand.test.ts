@@ -15,6 +15,7 @@ import {
   Mock,
 } from 'vitest';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { restoreCommand } from './restoreCommand.js';
 import { type CommandContext } from './types.js';
 import { createMockCommandContext } from '../../test-utils/mockCommandContext.js';
@@ -32,6 +33,10 @@ describe('restoreCommand', () => {
   let mockGitService: GitService;
   const mockFsPromises = fs as Mocked<typeof fs>;
   let mockSetHistory: ReturnType<typeof vi.fn>;
+  
+  // Use platform-appropriate temp directory
+  const mockTempDir = process.platform === 'win32' ? 'C:\\tmp\\gemini' : '/tmp/gemini';
+  const expectedCheckpointsDir = path.join(mockTempDir, 'checkpoints');
 
   beforeEach(() => {
     mockSetHistory = vi.fn().mockResolvedValue(undefined);
@@ -41,7 +46,7 @@ describe('restoreCommand', () => {
 
     mockConfig = {
       getCheckpointingEnabled: vi.fn().mockReturnValue(true),
-      getProjectTempDir: vi.fn().mockReturnValue('/tmp/gemini'),
+      getProjectTempDir: vi.fn().mockReturnValue(mockTempDir),
       getGeminiClient: vi.fn().mockReturnValue({
         setHistory: mockSetHistory,
       }),
@@ -96,7 +101,7 @@ describe('restoreCommand', () => {
         content: 'No restorable tool calls found.',
       });
       expect(mockFsPromises.mkdir).toHaveBeenCalledWith(
-        '/tmp/gemini/checkpoints',
+        expectedCheckpointsDir,
         {
           recursive: true,
         },

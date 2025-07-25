@@ -41,8 +41,18 @@ const rootDirectoryCheck: WarningCheck = {
       const errorMessage =
         'Warning: You are running Gemini CLI in the root directory. Your entire folder structure will be used for context. It is strongly recommended to run in a project-specific directory.';
 
-      // Check for Unix root directory
-      if (path.dirname(workspaceRealPath) === workspaceRealPath) {
+      // Check for root directory - platform agnostic approach
+      // On Unix: root is '/', dirname('/') === '/'
+      // On Windows: root is 'C:\', dirname('C:\') === 'C:\'
+      const parentDir = path.dirname(workspaceRealPath);
+      
+      // For root directories, the parent directory equals the current directory
+      if (parentDir === workspaceRealPath) {
+        return errorMessage;
+      }
+
+      // Additional check for Windows drive roots (e.g., 'C:\')
+      if (process.platform === 'win32' && /^[A-Za-z]:\\?$/.test(workspaceRealPath)) {
         return errorMessage;
       }
 

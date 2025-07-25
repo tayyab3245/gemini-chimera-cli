@@ -94,8 +94,6 @@ describe('getUserStartupWarnings', () => {
         .mockResolvedValueOnce('C:\\')
         .mockResolvedValueOnce(homeDir);
 
-      vi.spyOn(path, 'dirname').mockImplementation(path.win32.dirname);
-
       const warnings = await getUserStartupWarnings('C:\\');
 
       expect(warnings).toContainEqual(

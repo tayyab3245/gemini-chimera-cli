@@ -8,8 +8,8 @@ import { ChimeraEventBus } from './event-bus/bus.js';
 import { WorkflowEngine } from './coordination/workflowEngine.js';
 import { startEventBusGateway } from './event-bus/wsGateway.js';
 import { Config, ApprovalMode } from './config/config.js';
-import { GeminiChat } from './core/geminiChat.js';
-import { createContentGenerator, AuthType } from './core/contentGenerator.js';
+import { MockGeminiChat } from './agents/__mocks__/geminiChat.mock.js';
+import type { GeminiChat } from './core/geminiChat.js';
 import { DEFAULT_GEMINI_MODEL } from './config/models.js';
 import { sessionId } from './utils/session.js';
 
@@ -38,26 +38,9 @@ async function startDevServer() {
     // Initialize config
     await config.initialize();
 
-    // Create content generator (try different auth methods)
-    let contentGenerator;
-    try {
-      // Try with Gemini API key first
-      contentGenerator = await createContentGenerator({
-        model: DEFAULT_GEMINI_MODEL,
-        authType: AuthType.USE_GEMINI,
-        apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-      }, config, config.getSessionId());
-    } catch (error) {
-      console.warn('⚠️  Failed to initialize with API key, trying with Google auth...');
-      // Fallback to Google auth
-      contentGenerator = await createContentGenerator({
-        model: DEFAULT_GEMINI_MODEL,
-        authType: AuthType.LOGIN_WITH_GOOGLE,
-      }, config, config.getSessionId());
-    }
-
-    // Create GeminiChat instance
-    const geminiChat = new GeminiChat(config, contentGenerator);
+    // Use mock GeminiChat for development to avoid authentication requirements
+    console.log('Data collection is disabled.');
+    const geminiChat = new MockGeminiChat() as unknown as GeminiChat;
 
     // Create event bus
     const bus = new ChimeraEventBus();
