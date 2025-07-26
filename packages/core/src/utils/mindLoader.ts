@@ -16,9 +16,19 @@ export async function loadPrompt(promptPath: string): Promise<string | null> {
     const content = await fs.readFile(fullPath, 'utf-8');
     
     // Extract the exported prompt constant from the TypeScript file
-    const match = content.match(/export const KERNEL_CONSULT_PROMPT = `([^`]+)`/s);
-    if (match && match[1]) {
-      return match[1];
+    // Support multiple prompt constant patterns
+    const patterns = [
+      /export const KERNEL_CONSULT_PROMPT = `([^`]+)`/s,
+      /export const SYNTH_PLANNING_PROMPT = `([^`]+)`/s,
+      /export const (\w+_PROMPT) = `([^`]+)`/s
+    ];
+    
+    for (const pattern of patterns) {
+      const match = content.match(pattern);
+      if (match && match[1]) {
+        // For generic pattern, return the second capture group (the prompt content)
+        return pattern.source.includes('\\w+') ? match[2] : match[1];
+      }
     }
     
     // Fallback: try to find any multi-line string

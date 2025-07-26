@@ -9,20 +9,55 @@ import { SynthAgent } from './synth.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
 import type { AgentContext } from './agent.js';
+import type { GeminiChat } from '../core/geminiChat.js';
+import * as mindLoader from '../utils/mindLoader.js';
+
+// Mock the mindLoader module
+vi.mock('../utils/mindLoader.js', () => ({
+  loadPrompt: vi.fn()
+}));
 
 describe('SynthAgent', () => {
   let synthAgent: SynthAgent;
   let mockBus: ChimeraEventBus;
   let publishSpy: Mock;
+  let mockGeminiChat: GeminiChat;
+  let mockLoadPrompt: Mock;
 
   beforeEach(() => {
     mockBus = new ChimeraEventBus();
     publishSpy = vi.spyOn(mockBus, 'publish') as Mock;
-    synthAgent = new SynthAgent(mockBus);
+    mockLoadPrompt = vi.mocked(mindLoader.loadPrompt);
+
+    // Create mock GeminiChat with correct response structure
+    mockGeminiChat = {
+      sendMessage: vi.fn()
+    } as unknown as GeminiChat;
+
+    synthAgent = new SynthAgent(mockBus, mockGeminiChat);
+
+    // Default mock for mindLoader - return a simple prompt
+    mockLoadPrompt.mockResolvedValue('Generate a structured plan with 3-5 steps.');
   });
 
   describe('happy path - plan generation', () => {
-    it('should generate a plan with 1-5 steps and proper structure', async () => {
+    it('should generate a plan with at least 3 steps using GeminiChat and valid ChimeraPlan structure', async () => {
+      // Mock GeminiChat to return a multi-step plan
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{
+          content: {
+            parts: [{
+              text: `[
+                {"step_id": "S1", "description": "create TypeScript function for JSON file reading", "depends_on": [], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                {"step_id": "S2", "description": "implement validation logic with error handling", "depends_on": ["S1"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                {"step_id": "S3", "description": "write comprehensive unit tests", "depends_on": ["S2"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                {"step_id": "S4", "description": "test integration with file system", "depends_on": ["S3"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3}
+              ]`
+            }]
+          }
+        }]
+      });
+
       const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
         input: {
           clarifiedUserInput: 'Create a TypeScript function that reads a JSON file and validates the data structure',
@@ -38,14 +73,25 @@ describe('SynthAgent', () => {
       expect(result.output).toBeDefined();
       expect(result.output!.planJson).toBeDefined();
 
-      // Parse and validate the plan structure
+      // Parse and validate the ChimeraPlan structure
       const parsedPlan = JSON.parse(result.output!.planJson);
       expect(parsedPlan.task_id).toMatch(/^task-\d+$/);
       expect(parsedPlan.original_user_request).toBe(ctx.input.clarifiedUserInput);
       expect(parsedPlan.status).toBe('pending');
       expect(Array.isArray(parsedPlan.plan)).toBe(true);
-      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(1);
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3); // Must have at least 3 steps
       expect(parsedPlan.plan.length).toBeLessThanOrEqual(5);
+
+      // Validate ChimeraPlan specific fields
+      expect(Array.isArray(parsedPlan.requirements)).toBe(true);
+      expect(Array.isArray(parsedPlan.assumptions)).toBe(true);
+      expect(parsedPlan.assumptions).toEqual(ctx.input.assumptions);
+      expect(Array.isArray(parsedPlan.constraints)).toBe(true);
+      expect(parsedPlan.constraints).toEqual(ctx.input.constraints);
+      expect(parsedPlan.created_at).toBeDefined();
+      expect(parsedPlan.updated_at).toBeDefined();
+      expect(typeof parsedPlan.model_versions).toBe('object');
+      expect(Array.isArray(parsedPlan.history)).toBe(true);
 
       // Validate step structure
       parsedPlan.plan.forEach((step: any, index: number) => {
@@ -67,6 +113,17 @@ describe('SynthAgent', () => {
         }
       });
 
+      // Verify mindLoader was called
+      expect(mockLoadPrompt).toHaveBeenCalledWith('packages/core/src/mind/synth.prompt.ts');
+
+      // Verify GeminiChat was called
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(ctx.input.clarifiedUserInput)
+        }),
+        'synth-planning'
+      );
+
       // Verify progress events were published
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'agent-start',
@@ -78,7 +135,11 @@ describe('SynthAgent', () => {
       }));
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'progress',
-        payload: { percent: 50 }
+        payload: { percent: 40 }
+      }));
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'progress',
+        payload: { percent: 60 }
       }));
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'progress',
@@ -91,6 +152,96 @@ describe('SynthAgent', () => {
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'agent-end',
         payload: { id: AgentType.SYNTH }
+      }));
+    });
+
+    it('should fall back to local generation when prompt is missing', async () => {
+      // Mock prompt loading to return null (prompt not found)
+      mockLoadPrompt.mockResolvedValue(null);
+
+      const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+        input: {
+          clarifiedUserInput: 'Create a simple function',
+          assumptions: ['Basic task'],
+          constraints: []
+        },
+        bus: mockBus,
+      };
+
+      const result = await synthAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      const parsedPlan = JSON.parse(result.output!.planJson);
+      
+      // Should still generate at least 3 steps even with fallback
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+
+      // Verify mindLoader was called but returned null
+      expect(mockLoadPrompt).toHaveBeenCalledWith('packages/core/src/mind/synth.prompt.ts');
+      
+      // GeminiChat should still be called with default prompt
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Create a structured implementation plan with 3-5 steps')
+        }),
+        'synth-planning'
+      );
+    });
+
+    it('should handle no GeminiChat and use local generation with minimum 3 steps', async () => {
+      // Create agent without GeminiChat
+      const localSynthAgent = new SynthAgent(mockBus);
+      
+      // Reset the mock to ensure it hasn't been called from previous tests
+      mockLoadPrompt.mockClear();
+
+      const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+        input: {
+          clarifiedUserInput: 'Create a hello world function',
+          assumptions: ['Simple task'],
+          constraints: []
+        },
+        bus: mockBus,
+      };
+
+      const result = await localSynthAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      const parsedPlan = JSON.parse(result.output!.planJson);
+      
+      // Even simple tasks should generate at least 3 steps
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+      expect(parsedPlan.plan.length).toBeLessThanOrEqual(5);
+
+      // mindLoader should not be called when no GeminiChat
+      expect(mockLoadPrompt).not.toHaveBeenCalled();
+    });
+
+    it('should handle GeminiChat errors gracefully and fall back to local generation', async () => {
+      // Mock GeminiChat to throw an error
+      (mockGeminiChat.sendMessage as Mock).mockRejectedValue(new Error('API failure'));
+
+      const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+        input: {
+          clarifiedUserInput: 'Create a complex application',
+          assumptions: ['Full development needed'],
+          constraints: ['Multiple phases required']
+        },
+        bus: mockBus,
+      };
+
+      const result = await synthAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      const parsedPlan = JSON.parse(result.output!.planJson);
+      
+      // Should fall back to local generation with at least 3 steps
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+
+      // Should log the error
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'log',
+        payload: expect.stringContaining('Gemini error: API failure, falling back')
       }));
     });
 
@@ -134,12 +285,12 @@ describe('SynthAgent', () => {
       expect(result.ok).toBe(true);
       const parsedPlan = JSON.parse(result.output!.planJson);
       
-      // Complex input should generate more steps
-      expect(parsedPlan.plan.length).toBeGreaterThan(1);
+      // Complex input should generate at least 3 steps, likely 4-5
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
       expect(parsedPlan.plan.length).toBeLessThanOrEqual(5);
     });
 
-    it('should handle simple input with single step', async () => {
+    it('should handle simple input with minimum 3 steps', async () => {
       const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
         input: {
           clarifiedUserInput: 'Create a hello world function',
@@ -154,8 +305,9 @@ describe('SynthAgent', () => {
       expect(result.ok).toBe(true);
       const parsedPlan = JSON.parse(result.output!.planJson);
       
-      // Simple input might generate just one step
-      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(1);
+      // Even simple input should generate at least 3 steps
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+      expect(parsedPlan.plan.length).toBeLessThanOrEqual(5);
     });
   });
 
