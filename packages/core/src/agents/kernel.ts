@@ -69,7 +69,7 @@ export class KernelAgent {
       
       // Compute confidence score for input clarity
       const confidence = this.computeConfidenceScore(ctx.input.userInput);
-      const isVague = confidence < 0.5; // Low confidence threshold
+      const isVague = confidence < 0.6; // Low confidence threshold as per P3.13.F requirement
       
       this.bus.publish({ ts: Date.now(), type: 'log', payload: `Confidence score: ${confidence.toFixed(2)} (${isVague ? 'vague' : 'clear'})` });
 

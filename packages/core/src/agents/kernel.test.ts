@@ -52,7 +52,7 @@ describe('KernelAgent', () => {
       });
 
       const ctx: AgentContext<{ userInput: string }> = {
-        input: { userInput: 'I need help with the login bug in my authentication system' },
+        input: { userInput: 'Create a new user registration form with proper validation' },
         bus: mockBus,
       };
 
@@ -69,7 +69,7 @@ describe('KernelAgent', () => {
 
       // Verify the user input was included in the prompt
       expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
-        { message: expect.stringContaining('I need help with the login bug in my authentication system') },
+        { message: expect.stringContaining('Create a new user registration form with proper validation') },
         "kernel-clarification-analysis"
       );
 
@@ -469,6 +469,130 @@ describe('KernelAgent', () => {
         { message: expect.stringContaining('Rewrite as clear task.') },
         "kernel-clarification-analysis"
       );
+    });
+  });
+
+  describe('Confidence threshold behavior (P3.13.F)', () => {
+    it('should use follow-up mode when confidence is exactly below 0.6', async () => {
+      // Mock follow-up prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('followup')) {
+          return Promise.resolve('Ask clarifying question.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a follow-up question
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'What exactly do you need help with?' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'do something' }, // Very vague input with vague phrase, should score < 0.6
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('What exactly do you need help with?');
+
+      // Verify agent-followup event was published with correct payload structure
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup',
+        payload: {
+          agent: AgentType.KERNEL,
+          question: 'What exactly do you need help with?'
+        }
+      }));
+
+      // Verify follow-up analysis type was used
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        "kernel-follow-up-analysis"
+      );
+    });
+
+    it('should use clarification mode when confidence is 0.6 or above', async () => {
+      // Mock consultant prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('consult')) {
+          return Promise.resolve('Clarify user request.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a clarified task
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'Create user authentication system' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'build user authentication system' }, // Specific enough to score >= 0.6
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('Create user authentication system');
+
+      // Verify NO agent-followup event was published
+      expect(publishSpy).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup'
+      }));
+
+      // Verify clarification analysis type was used
+      expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
+        expect.anything(),
+        "kernel-clarification-analysis"
+      );
+      
+      // Verify standard log event was published (not follow-up)
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'log',
+        payload: 'Clarified task: Create user authentication system'
+      }));
+    });
+
+    it('should publish agent-followup event with correct payload structure', async () => {
+      // Mock follow-up prompt loading
+      mockLoadPrompt.mockImplementation((path: string) => {
+        if (path.includes('followup')) {
+          return Promise.resolve('Generate follow-up question.');
+        }
+        return Promise.resolve('Default prompt');
+      });
+      
+      // Mock GeminiChat to return a specific follow-up question
+      (mockGeminiChat.sendMessage as Mock).mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'Could you clarify what type of application you want to build?' }] } }]
+      });
+
+      const ctx: AgentContext<{ userInput: string }> = {
+        input: { userInput: 'make something' }, // Vague input with low confidence
+        bus: mockBus,
+      };
+
+      const result = await kernelAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(result.output).toBe('Could you clarify what type of application you want to build?');
+
+      // Verify agent-followup event has exact payload structure as required by P3.13.F
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent-followup',
+        payload: {
+          agent: AgentType.KERNEL,
+          question: 'Could you clarify what type of application you want to build?'
+        }
+      }));
+      
+      // Verify follow-up log message
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'log',
+        payload: 'Follow-up question: Could you clarify what type of application you want to build?'
+      }));
     });
   });
 });

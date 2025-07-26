@@ -258,8 +258,8 @@ export const STRESS_TEST_CASES: StressTestCase[] = [
   {
     name: 'very long input',
     userInput: 'I need help with implementing a comprehensive authentication system that includes user registration email verification password reset functionality two factor authentication integration with social media platforms like Google and Facebook plus admin dashboard for user management and detailed audit logging for security compliance and performance monitoring with real time analytics and automated backup systems',
-    expectedConfidence: 'high',
-    expectedEventTypes: ['agent-start', 'progress', 'log', 'progress', 'log', 'progress', 'progress', 'log', 'agent-end']
+    expectedConfidence: 'low', // Contains many vague terms that reduce confidence
+    expectedEventTypes: ['agent-start', 'progress', 'log', 'progress', 'log', 'progress', 'progress', 'log', 'agent-followup', 'agent-end']
   },
   {
     name: 'gibberish input',

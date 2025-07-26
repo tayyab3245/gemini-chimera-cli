@@ -92,12 +92,12 @@ describe('Workflow Smoke Tests', () => {
     // Check that we get workflow-start event
     expect(events).toContain('workflow-start');
     
-    // Verify that GeminiChat was called for clarification analysis (using fallback prompt)
+    // Verify that GeminiChat was called for follow-up analysis (using follow-up prompt)
     expect(mockGeminiChat.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("Rewrite user request in ≤50 chars.")
+        message: expect.stringContaining("What specific task would you like help with?")
       }),
-      "kernel-clarification-analysis"
+      "kernel-follow-up-analysis"
     );
   });
 
