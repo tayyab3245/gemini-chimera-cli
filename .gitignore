@@ -46,3 +46,4 @@ packages/cli/src/generated/
 .integration-tests/
 packages/vscode-ide-companion/*.vsix
 project-directory-tree.md
+packages/core/docs/architecture/AGENT_FLOW.md

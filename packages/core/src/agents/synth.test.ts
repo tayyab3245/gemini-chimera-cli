@@ -417,4 +417,118 @@ describe('SynthAgent', () => {
       });
     });
   });
+
+  describe('P3.14-SYNTH-GUARDS: timeout and retry logic', () => {
+    it('should succeed after timeout then success within 3 retries', async () => {
+      let callCount = 0;
+      (mockGeminiChat.sendMessage as Mock).mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          // First call times out
+          throw new Error('timeout');
+        }
+        // Second call succeeds
+        return {
+          candidates: [{
+            content: {
+              parts: [{
+                text: `[
+                  {"step_id": "S1", "description": "create initial implementation", "depends_on": [], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                  {"step_id": "S2", "description": "add error handling", "depends_on": ["S1"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                  {"step_id": "S3", "description": "write comprehensive tests", "depends_on": ["S2"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3}
+                ]`
+              }]
+            }
+          }]
+        };
+      });
+
+      const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+        input: {
+          clarifiedUserInput: 'Create a function with error handling',
+          assumptions: ['Error handling needed'],
+          constraints: ['Must be robust']
+        },
+        bus: mockBus,
+      };
+
+      const result = await synthAgent.run(ctx);
+
+      expect(result.ok).toBe(true);
+      expect(callCount).toBe(2); // First call failed, second succeeded
+      
+      const parsedPlan = JSON.parse(result.output!.planJson);
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should emit error event and return fallback plan when all retries fail', async () => {
+      // Mock GeminiChat to always fail
+      (mockGeminiChat.sendMessage as Mock).mockRejectedValue(new Error('Permanent API failure'));
+
+      const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+        input: {
+          clarifiedUserInput: 'Create a complex application',
+          assumptions: ['Full development needed'],
+          constraints: ['Multiple phases required']
+        },
+        bus: mockBus,
+      };
+
+      const result = await synthAgent.run(ctx);
+
+      expect(result.ok).toBe(true); // Should still succeed with fallback
+      
+      // Verify error event was emitted
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'error',
+        payload: expect.objectContaining({
+          agent: 'SYNTH',
+          message: 'Permanent API failure',
+          stack: expect.any(String)
+        })
+      }));
+
+      // Verify log event was also emitted
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'log',
+        payload: expect.stringContaining('Gemini error: Permanent API failure, falling back')
+      }));
+
+      // Should fall back to local generation with at least 3 steps
+      const parsedPlan = JSON.parse(result.output!.planJson);
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should handle timeout errors specifically', async () => {
+      // Mock GeminiChat to timeout
+      (mockGeminiChat.sendMessage as Mock).mockRejectedValue(new Error('timeout'));
+
+      const ctx: AgentContext<{ clarifiedUserInput: string; assumptions: string[]; constraints: string[] }> = {
+        input: {
+          clarifiedUserInput: 'Create a timeout-prone function',
+          assumptions: ['Network calls involved'],
+          constraints: ['Must handle timeouts']
+        },
+        bus: mockBus,
+      };
+
+      const result = await synthAgent.run(ctx);
+
+      expect(result.ok).toBe(true); // Should still succeed with fallback
+      
+      // Verify timeout-specific error event was emitted
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'error',
+        payload: expect.objectContaining({
+          agent: 'SYNTH',
+          message: 'timeout',
+          stack: expect.any(String)
+        })
+      }));
+
+      // Should fall back to local generation
+      const parsedPlan = JSON.parse(result.output!.planJson);
+      expect(parsedPlan.plan.length).toBeGreaterThanOrEqual(3);
+    });
+  });
 });

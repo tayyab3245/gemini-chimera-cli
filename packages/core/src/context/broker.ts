@@ -4,6 +4,8 @@ import type { AgentKind } from '../interfaces/agent.js';
 export interface BaseContext {
   userInput?: string;
   clarifiedUserInput?: string;         // Kernel's refined task sentence
+  assumptions?: string[];              // Kernel's detected assumptions
+  constraints?: string[];              // Kernel's detected constraints
   planJson?: string;
   planStep?: string;
   artifacts?: string[];
@@ -18,7 +20,9 @@ export function buildContextSlice<T extends BaseContext>(
       return full;                                      // gets everything
     case 'SYNTH':
       return { 
-        userInput: full.clarifiedUserInput || full.userInput, 
+        clarifiedUserInput: full.clarifiedUserInput || full.userInput,
+        assumptions: full.assumptions || [],
+        constraints: full.constraints || [],
         planJson: full.planJson 
       } as Partial<T>;
     case 'DRIVE':
@@ -40,13 +44,20 @@ if (typeof import.meta.vitest !== 'undefined') {
     const ctx: BaseContext = { 
       userInput: 'test', 
       clarifiedUserInput: 'Create test app',
+      assumptions: ['assumption1', 'assumption2'],
+      constraints: ['constraint1'],
       planJson: '{}', 
       planStep: 'step', 
       artifacts: ['f1'] 
     };
     
     expect(buildContextSlice('KERNEL', ctx)).toEqual(ctx);
-    expect(buildContextSlice('SYNTH', ctx)).toEqual({ userInput: 'Create test app', planJson: '{}' });
+    expect(buildContextSlice('SYNTH', ctx)).toEqual({ 
+      clarifiedUserInput: 'Create test app', 
+      assumptions: ['assumption1', 'assumption2'],
+      constraints: ['constraint1'],
+      planJson: '{}' 
+    });
     expect(buildContextSlice('DRIVE', ctx)).toEqual({ planStep: 'step', artifacts: ['f1'] });
     expect(buildContextSlice('AUDIT', ctx)).toEqual({ planJson: '{}', artifacts: ['f1'] });
   });

@@ -173,7 +173,9 @@ describe('WorkflowEngine Integration Tests', () => {
       // Verify that SYNTH received the clarified input from Kernel
       expect(synthReceivedContext).toEqual(
         expect.objectContaining({
-          userInput: 'Create a Node.js app', // This should be the clarified input
+          clarifiedUserInput: 'Create a Node.js app', // This should be the clarified input
+          assumptions: [],
+          constraints: [],
           planJson: '{}'
         })
       );
@@ -383,6 +385,96 @@ describe('WorkflowEngine Integration Tests', () => {
           })
         })
       );
+    });
+  });
+
+  describe('P3.14-SYNTH-ITEST: SynthAgent resilience integration', () => {
+    it('should handle SynthAgent Gemini failures with retry logic and emit correct events', async () => {
+      let geminiCallCount = 0;
+
+      // Mock GeminiChat to fail twice then succeed
+      mockGeminiChat.sendMessage = vi.fn().mockImplementation(async () => {
+        geminiCallCount++;
+        console.log(`GeminiChat.sendMessage called: ${geminiCallCount}`);
+        if (geminiCallCount <= 2) {
+          // First two calls fail with network errors
+          throw new Error(`Network failure ${geminiCallCount}`);
+        }
+        // Third call succeeds with valid plan JSON
+        return {
+          candidates: [{
+            content: {
+              parts: [{
+                text: `[
+                  {"step_id": "S1", "description": "create initial implementation", "depends_on": [], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                  {"step_id": "S2", "description": "add error handling", "depends_on": ["S1"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3},
+                  {"step_id": "S3", "description": "write comprehensive tests", "depends_on": ["S2"], "status": "pending", "artifacts": [], "attempts": 0, "max_attempts": 3}
+                ]`
+              }]
+            }
+          }]
+        };
+      });
+
+      // Mock KernelAgent to provide input for SynthAgent
+      vi.mocked(KernelAgent).mockImplementation(() => ({
+        run: vi.fn().mockResolvedValue({
+          ok: true,
+          output: {
+            clarifiedUserInput: 'Create a resilient function with error handling',
+            assumptions: ['Error handling needed', 'Retry logic required'],
+            constraints: ['Must be robust', 'Should handle timeouts']
+          }
+        })
+      }) as any);
+
+      // Clear the SynthAgent mock for this test to use the real implementation
+      const { SynthAgent: ActualSynthAgent } = await vi.importActual('../agents/synth.js') as any;
+      vi.mocked(SynthAgent).mockImplementation((eventBus, geminiChat) => {
+        console.log('Creating SynthAgent with:', { eventBus: !!eventBus, geminiChat: !!geminiChat });
+        return new ActualSynthAgent(eventBus, geminiChat);
+      });
+
+      engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
+      
+      const result = await engine.run('Create a resilient function with error handling');
+
+      // Log all published events for debugging
+      console.log('Published events:', publishedEvents.map(e => ({ type: e.type, payload: e.payload })));
+
+      // Verify exactly 3 calls were made to GeminiChat (2 failures + 1 success)
+      console.log('geminiCallCount:', geminiCallCount);
+      expect(geminiCallCount).toBe(3);
+
+      // Verify two error events were published from retry failures
+      const errorEvents = publishedEvents.filter(event => 
+        event.type === 'error' && 
+        event.payload.agent === 'SYNTH' &&
+        event.payload.message.includes('Network failure')
+      );
+      console.log('Error events:', errorEvents);
+      expect(errorEvents).toHaveLength(2);
+
+      // Verify a progress event is emitted after successful retry
+      expect(publishedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'progress',
+          payload: expect.objectContaining({
+            percent: expect.any(Number)
+          })
+        })
+      );
+
+      // Verify workflow completed successfully
+      expect(publishedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'log',
+          payload: 'workflow-complete'
+        })
+      );
+
+      // Verify the final plan was returned
+      expect(result).toBeDefined();
     });
   });
 });

@@ -10,6 +10,7 @@ import { AgentType } from '../event-bus/types.js';
 import type { PlanStep, ChimeraPlan } from '../interfaces/chimera.js';
 import type { GeminiChat } from '../core/geminiChat.js';
 import { loadPrompt } from '../utils/mindLoader.js';
+import { withTimeout, withRetries } from '../coordination/recovery.js';
 
 export interface SynthInput {
   clarifiedUserInput: string;
@@ -55,17 +56,20 @@ export class SynthAgent {
         this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 40 }});
 
         try {
-          const response = await this.geminiChat.sendMessage(
-            {
-              message: `${prompt}
+          const response = await withRetries(
+            () => withTimeout(this.geminiChat!.sendMessage(
+              {
+                message: `${prompt}
 
 User Input: "${ctx.input.clarifiedUserInput}"
 Assumptions: ${ctx.input.assumptions.join(', ')}
 Constraints: ${ctx.input.constraints.join(', ')}
 
 Plan Steps:`
-            },
-            'synth-planning'
+              },
+              'synth-planning'
+            ), 60_000),
+            3
           );
 
           // Progress: 60% - Gemini response received
@@ -79,6 +83,15 @@ Plan Steps:`
             steps = this.generatePlanSteps(ctx.input);
           }
         } catch (geminiError) {
+          this.bus.publish({ 
+            ts: Date.now(), 
+            type: 'error', 
+            payload: { 
+              agent: 'SYNTH', 
+              message: geminiError instanceof Error ? geminiError.message : String(geminiError),
+              stack: geminiError instanceof Error ? geminiError.stack : undefined
+            } 
+          });
           this.bus.publish({ ts: Date.now(), type: 'log', payload: `Gemini error: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}, falling back` });
           steps = this.generatePlanSteps(ctx.input);
         }

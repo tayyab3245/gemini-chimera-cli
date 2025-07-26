@@ -22,7 +22,7 @@ export class WorkflowEngine {
   constructor(private bus: ChimeraEventBus, private geminiChat: GeminiChat, private toolRegistry?: ToolRegistry) {
     this.stateMachine = new WorkflowStateMachine(bus);
     this.kernel = new KernelAgent(bus, geminiChat);
-    this.synth = new SynthAgent(bus);
+    this.synth = new SynthAgent(bus, geminiChat);
     this.drive = new DriveAgent(bus);
     this.audit = new AuditAgent(bus);
     
@@ -96,7 +96,15 @@ export class WorkflowEngine {
 
       // Update fullContext with agent outputs
       if (agentKind === 'KERNEL' && result.output) {
-        fullContext.clarifiedUserInput = result.output;
+        // Handle both string outputs (legacy) and object outputs (new format)
+        if (typeof result.output === 'string') {
+          fullContext.clarifiedUserInput = result.output;
+        } else {
+          // New format with assumptions and constraints
+          fullContext.clarifiedUserInput = result.output.clarifiedUserInput;
+          fullContext.assumptions = result.output.assumptions;
+          fullContext.constraints = result.output.constraints;
+        }
         
         // Log context slice preparation for SYNTH
         this.bus.publish({
