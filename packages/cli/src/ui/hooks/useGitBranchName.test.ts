@@ -128,8 +128,7 @@ describe('useGitBranchName', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('should update branch name when .git/HEAD changes', async ({ skip }) => {
-    skip(); // TODO: fix
+  it('should update branch name when .git/HEAD changes', async () => {
     (mockExec as MockedFunction<typeof mockExec>).mockImplementationOnce(
       (_command, _options, callback) => {
         callback?.(null, 'main\n', '');
@@ -209,8 +208,7 @@ describe('useGitBranchName', () => {
     expect(result.current).toBe('main');
   });
 
-  it('should cleanup watcher on unmount', async ({ skip }) => {
-    skip(); // TODO: fix
+  it('should cleanup watcher on unmount', async () => {
     const closeMock = vi.fn();
     const watchMock = vi.spyOn(fs, 'watch').mockReturnValue({
       close: closeMock,

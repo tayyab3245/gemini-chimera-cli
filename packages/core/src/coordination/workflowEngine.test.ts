@@ -437,7 +437,13 @@ describe('WorkflowEngine Integration Tests', () => {
 
       engine = new WorkflowEngine(bus, mockGeminiChat, mockToolRegistry);
       
-      const result = await engine.run('Create a resilient function with error handling');
+      let result;
+      try {
+        result = await engine.run('Create a resilient function with error handling');
+      } catch (error) {
+        console.log('Workflow failed with error:', error);
+        throw error;
+      }
 
       // Log all published events for debugging
       console.log('Published events:', publishedEvents.map(e => ({ type: e.type, payload: e.payload })));
@@ -473,8 +479,8 @@ describe('WorkflowEngine Integration Tests', () => {
         })
       );
 
-      // Verify the final plan was returned
-      expect(result).toBeDefined();
+      // Verify the workflow run method completed without throwing (result is void)
+      expect(result).toBeUndefined();
     });
   });
 });

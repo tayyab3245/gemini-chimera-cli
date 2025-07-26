@@ -56,7 +56,7 @@ export class SynthAgent {
         this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 40 }});
 
         try {
-          const response = await withRetries(
+          const response = await this.callGeminiWithRetries(
             () => withTimeout(this.geminiChat!.sendMessage(
               {
                 message: `${prompt}
@@ -124,6 +124,49 @@ Plan Steps:`
       this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id }});
       return { ok: false, error: `Planning failed: ${error instanceof Error ? error.message : String(error)}` };
     }
+  }
+
+  private async callGeminiWithRetries<T>(
+    fn: () => Promise<T>,
+    max = 3,
+    baseDelayMs = 250,
+  ): Promise<T> {
+    let lastError: Error;
+    
+    for (let attempt = 0; attempt <= max; attempt++) {
+      try {
+        // First attempt is immediate (no delay)
+        if (attempt > 0) {
+          const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+        
+        return await fn();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // Emit error event for each retry failure (but not the final success)
+        if (attempt < max) {
+          this.bus.publish({
+            ts: Date.now(),
+            type: 'error',
+            payload: {
+              agent: 'SYNTH',
+              message: lastError.message,
+              details: lastError.stack
+            }
+          });
+        }
+        
+        // If this was the last attempt, throw the error
+        if (attempt === max) {
+          throw lastError;
+        }
+      }
+    }
+    
+    // This should never be reached, but TypeScript requires it
+    throw lastError!;
   }
 
   private parseGeminiResponse(response: any): PlanStep[] {

@@ -18,7 +18,7 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
   };
 });
 
-describe.skip('startupWarnings', () => {
+describe('startupWarnings', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });

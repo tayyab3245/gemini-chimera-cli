@@ -1,4 +1,5 @@
 import type { AgentKind } from '../interfaces/agent.js';
+import type { PlanStep } from '../interfaces/chimera.js';
 
 // BaseContext interface - contains all possible context fields
 export interface BaseContext {
@@ -7,7 +8,7 @@ export interface BaseContext {
   assumptions?: string[];              // Kernel's detected assumptions
   constraints?: string[];              // Kernel's detected constraints
   planJson?: string;
-  planStep?: string;
+  planStep?: PlanStep;
   artifacts?: string[];
 }
 
@@ -41,13 +42,23 @@ if (typeof import.meta.vitest !== 'undefined') {
   const { test, expect } = import.meta.vitest;
 
   test('buildContextSlice filters context correctly', () => {
+    const testPlanStep: PlanStep = {
+      step_id: 'S1',
+      description: 'test step',
+      depends_on: [],
+      status: 'pending',
+      artifacts: [],
+      attempts: 0,
+      max_attempts: 3
+    };
+
     const ctx: BaseContext = { 
       userInput: 'test', 
       clarifiedUserInput: 'Create test app',
       assumptions: ['assumption1', 'assumption2'],
       constraints: ['constraint1'],
       planJson: '{}', 
-      planStep: 'step', 
+      planStep: testPlanStep, 
       artifacts: ['f1'] 
     };
     
@@ -58,7 +69,7 @@ if (typeof import.meta.vitest !== 'undefined') {
       constraints: ['constraint1'],
       planJson: '{}' 
     });
-    expect(buildContextSlice('DRIVE', ctx)).toEqual({ planStep: 'step', artifacts: ['f1'] });
+    expect(buildContextSlice('DRIVE', ctx)).toEqual({ planStep: testPlanStep, artifacts: ['f1'] });
     expect(buildContextSlice('AUDIT', ctx)).toEqual({ planJson: '{}', artifacts: ['f1'] });
   });
 }

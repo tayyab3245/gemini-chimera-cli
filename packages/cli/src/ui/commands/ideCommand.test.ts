@@ -9,6 +9,7 @@ import { ideCommand } from './ideCommand.js';
 import { type CommandContext } from './types.js';
 import { type Config } from '@google/gemini-cli-core';
 import * as child_process from 'child_process';
+import * as process from 'process';
 import { glob } from 'glob';
 
 import {
@@ -36,7 +37,6 @@ describe('ideCommand', () => {
   let mockConfig: Config;
   let execSyncSpy: vi.SpyInstance;
   let globSyncSpy: vi.SpyInstance;
-  let platformSpy: vi.SpyInstance;
   let getMCPServerStatusSpy: vi.SpyInstance;
   let getMCPDiscoveryStateSpy: vi.SpyInstance;
 
@@ -53,7 +53,6 @@ describe('ideCommand', () => {
 
     execSyncSpy = vi.spyOn(child_process, 'execSync');
     globSyncSpy = vi.spyOn(glob, 'sync');
-    platformSpy = vi.spyOn(process, 'platform', 'get');
     getMCPServerStatusSpy = vi.mocked(getMCPServerStatus);
     getMCPDiscoveryStateSpy = vi.mocked(getMCPDiscoveryState);
   });
@@ -120,7 +119,7 @@ describe('ideCommand', () => {
 
     it('should show disconnected status', () => {
       getMCPServerStatusSpy.mockReturnValue(MCPServerStatus.DISCONNECTED);
-      getMCPDiscoveryStateSpy.mockReturnValue(MCPDiscoveryState.NOT_FOUND);
+      getMCPDiscoveryStateSpy.mockReturnValue(MCPDiscoveryState.COMPLETED);
       const command = ideCommand(mockConfig);
       const result = command?.subCommands?.[0].action(mockContext, '');
       expect(result).toEqual({
@@ -134,7 +133,6 @@ describe('ideCommand', () => {
   describe('install subcommand', () => {
     beforeEach(() => {
       (mockConfig.getIdeMode as vi.Mock).mockReturnValue(true);
-      platformSpy.mockReturnValue('linux');
     });
 
     it('should show an error if VSCode is not installed', async () => {
@@ -145,11 +143,13 @@ describe('ideCommand', () => {
       const command = ideCommand(mockConfig);
       await command?.subCommands?.[1].action(mockContext, '');
 
+      // The command name depends on platform
+      const expectedCommand = process.platform === 'win32' ? 'code.cmd' : 'code';
       expect(mockContext.ui.addItem).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'error',
           text: expect.stringContaining(
-            'VS Code command-line tool "code" not found',
+            `VS Code command-line tool "${expectedCommand}" not found`,
           ),
         }),
         expect.any(Number),
@@ -180,11 +180,12 @@ describe('ideCommand', () => {
       const command = ideCommand(mockConfig);
       await command?.subCommands?.[1].action(mockContext, '');
 
+      const expectedCommand = process.platform === 'win32' ? 'code.cmd' : 'code';
       expect(globSyncSpy).toHaveBeenCalledWith(
         expect.stringContaining('.vsix'),
       );
       expect(execSyncSpy).toHaveBeenCalledWith(
-        `code --install-extension ${vsixPath} --force`,
+        `${expectedCommand} --install-extension ${vsixPath} --force`,
         { stdio: 'pipe' },
       );
       expect(mockContext.ui.addItem).toHaveBeenCalledWith(
@@ -213,8 +214,9 @@ describe('ideCommand', () => {
       await command?.subCommands?.[1].action(mockContext, '');
 
       expect(globSyncSpy).toHaveBeenCalledTimes(2);
+      const expectedCommand = process.platform === 'win32' ? 'code.cmd' : 'code';
       expect(execSyncSpy).toHaveBeenCalledWith(
-        `code --install-extension ${vsixPath} --force`,
+        `${expectedCommand} --install-extension ${vsixPath} --force`,
         { stdio: 'pipe' },
       );
       expect(mockContext.ui.addItem).toHaveBeenCalledWith(

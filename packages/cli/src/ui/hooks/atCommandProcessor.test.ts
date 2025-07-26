@@ -490,7 +490,7 @@ describe('handleAtCommand', () => {
 
     expect(mockReadManyFilesExecute).toHaveBeenCalledWith(
       {
-        paths: [file1, resolvedFile2],
+        paths: [file1, expect.stringMatching(/resolved[\\\/]valid2\.actual/)],
         file_filtering_options: {
           respect_git_ignore: true,
           respect_gemini_ignore: true,
@@ -501,12 +501,12 @@ describe('handleAtCommand', () => {
     expect(result.processedQuery).toEqual([
       // Original query has @nonexistent.txt and @, but resolved has @resolved/valid2.actual
       {
-        text: `Look at @${file1} then @${invalidFile} and also just @ symbol, then @${resolvedFile2}`,
+        text: expect.stringMatching(new RegExp(`Look at @${file1} then @${invalidFile} and also just @ symbol, then @resolved[\\\\\/]valid2\\.actual`)),
       },
       { text: '\n--- Content from referenced files ---' },
       { text: `\nContent from @${file1}:\n` },
       { text: content1 },
-      { text: `\nContent from @${resolvedFile2}:\n` },
+      { text: expect.stringMatching(/\nContent from @resolved[\\\/]valid2\.actual:\n/) },
       { text: content2 },
       { text: '\n--- End of content ---' },
     ]);
