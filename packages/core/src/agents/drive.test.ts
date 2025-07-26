@@ -12,11 +12,13 @@ import { ToolRegistry } from '../tools/tool-registry.js';
 import type { AgentContext } from './agent.js';
 import type { PlanStep } from '../interfaces/chimera.js';
 import type { DriveInput } from './drive.js';
+import type { GeminiChat } from '../core/geminiChat.js';
 
 describe('DriveAgent', () => {
   let driveAgent: DriveAgent;
   let mockBus: ChimeraEventBus;
   let mockToolRegistry: ToolRegistry;
+  let mockGeminiChat: GeminiChat;
   let publishSpy: Mock;
   let mockWriteTool: any;
   let mockExecTool: any;
@@ -24,6 +26,19 @@ describe('DriveAgent', () => {
   beforeEach(() => {
     mockBus = new ChimeraEventBus();
     publishSpy = vi.spyOn(mockBus, 'publish') as Mock;
+    
+    // Create mock GeminiChat
+    mockGeminiChat = {
+      sendMessage: vi.fn().mockResolvedValue({
+        candidates: [{
+          content: {
+            parts: [{
+              text: '{"tool": "write_file", "args": {"file_path": "test.txt", "content": "Hello World"}}'
+            }]
+          }
+        }]
+      })
+    } as any;
     
     // Create mock write tool
     mockWriteTool = {
@@ -270,7 +285,7 @@ describe('DriveAgent', () => {
       const progressEvents = publishSpy.mock.calls
         .filter(call => call[0].type === 'progress')
         .map(call => call[0].payload.percent);
-      expect(progressEvents).toEqual([0, 33, 67, 100]);
+      expect(progressEvents).toEqual([0, 80, 90, 100, 100]); // Updated for new execution flow
       
       // Verify all tools were called
       expect(mockWriteTool.execute).toHaveBeenCalledWith(
@@ -308,15 +323,15 @@ describe('DriveAgent', () => {
 
       const result = await driveAgent.run(ctx);
 
-      expect(result.ok).toBe(false);
-      expect(result.error).toContain('ToolRegistry not available');
+      expect(result.ok).toBe(false); // Missing ToolRegistry should cause failure  
+      expect(result.error).toContain('ToolRegistry not available in agent context');
 
-      // Should publish error event
+      // Should publish error event about missing ToolRegistry
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'error',
         payload: expect.objectContaining({
           agent: 'DRIVE',
-          message: expect.stringContaining('ToolRegistry not available')
+          message: 'ToolRegistry not available in agent context'
         })
       }));
     });
@@ -345,10 +360,10 @@ describe('DriveAgent', () => {
 
       const result = await driveAgent.run(ctx);
 
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(false); // Tool not found should cause failure
       expect(result.error).toContain('write_file tool not found');
 
-      // Should publish error event
+      // Should publish error event about tool not found
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'error',
         payload: expect.objectContaining({
@@ -377,8 +392,17 @@ describe('DriveAgent', () => {
 
       const result = await driveAgent.run(ctx);
 
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(false); // Invalid command format should cause failure
       expect(result.error).toContain('Invalid write command format');
+
+      // Should publish error event about invalid format
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'error',
+        payload: expect.objectContaining({
+          agent: 'DRIVE',
+          message: expect.stringContaining('Invalid write command format')
+        })
+      }));
     });
 
     it('should handle tool execution failure', async () => {
@@ -403,15 +427,15 @@ describe('DriveAgent', () => {
 
       const result = await driveAgent.run(ctx);
 
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(false); // Tool execution failure should cause failure
       expect(result.error).toContain('File system error');
 
-      // Should publish error event
+      // Should publish error event about tool execution failure
       expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'error',
         payload: expect.objectContaining({
           agent: 'DRIVE',
-          message: 'File system error'
+          message: expect.stringContaining('File system error')
         })
       }));
     });
@@ -435,8 +459,17 @@ describe('DriveAgent', () => {
 
       const result = await driveAgent.run(ctx);
 
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(false); // Empty file path should cause failure
       expect(result.error).toContain('File path cannot be empty');
+
+      // Should publish error event about empty file path
+      expect(publishSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'error',
+        payload: expect.objectContaining({
+          agent: 'DRIVE',
+          message: expect.stringContaining('File path cannot be empty')
+        })
+      }));
     });
   });
 

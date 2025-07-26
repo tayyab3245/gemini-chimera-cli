@@ -23,7 +23,7 @@ export class WorkflowEngine {
     this.stateMachine = new WorkflowStateMachine(bus);
     this.kernel = new KernelAgent(bus, geminiChat);
     this.synth = new SynthAgent(bus, geminiChat);
-    this.drive = new DriveAgent(bus);
+    this.drive = new DriveAgent(bus, geminiChat);
     this.audit = new AuditAgent(bus);
     
     // Subscribe to chat messages from WebSocket clients

@@ -8,6 +8,9 @@ import type { AgentContext, AgentResult } from './agent.js';
 import { ChimeraEventBus } from '../event-bus/bus.js';
 import { AgentType } from '../event-bus/types.js';
 import type { PlanStep } from '../interfaces/chimera.js';
+import type { GeminiChat } from '../core/geminiChat.js';
+import { loadPrompt } from '../utils/mindLoader.js';
+import { withTimeout, withRetries } from '../coordination/recovery.js';
 
 export interface DriveInput {
   planStep: PlanStep;
@@ -28,7 +31,7 @@ export interface ExecutedStep {
 export class DriveAgent {
   readonly id = AgentType.DRIVE;
   
-  constructor(private bus: ChimeraEventBus) {}
+  constructor(private bus: ChimeraEventBus, private geminiChat?: GeminiChat) {}
 
   async run(
     ctx: AgentContext<DriveInput>
@@ -48,35 +51,15 @@ export class DriveAgent {
         throw new Error('ToolRegistry not available in agent context');
       }
 
-      // Parse and execute commands
-      const commands = this.parseCommands(description);
-      const artifacts: string[] = [];
+      // Try to use live prompt with Gemini first, with fallback to rule-based parsing
+      const artifacts = await this.executeWithLivePrompt(description, toolRegistry);
       
-      if (commands.length === 0) {
-        // No commands to execute - just emit 100% progress and return empty artifacts
-        this.bus.publish({ 
-          ts: Date.now(), 
-          type: 'progress', 
-          payload: { percent: 100 } 
-        });
-      } else {
-        // Execute each command with progress tracking
-        for (let i = 0; i < commands.length; i++) {
-          const command = commands[i];
-          const progressPercent = Math.round(((i + 1) / commands.length) * 100);
-          
-          // Execute the command
-          const commandArtifacts = await this.executeCommand(command, toolRegistry);
-          artifacts.push(...commandArtifacts);
-          
-          // Publish progress after each command
-          this.bus.publish({ 
-            ts: Date.now(), 
-            type: 'progress', 
-            payload: { percent: progressPercent } 
-          });
-        }
-      }
+      // Progress: 100% - Execution complete
+      this.bus.publish({ 
+        ts: Date.now(), 
+        type: 'progress', 
+        payload: { percent: 100 } 
+      });
 
       this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
       return { ok: true, output: { artifacts } };
@@ -94,6 +77,181 @@ export class DriveAgent {
       this.bus.publish({ ts: Date.now(), type: 'agent-end', payload: { id: this.id } });
       return { ok: false, error: `Drive execution failed: ${error instanceof Error ? error.message : String(error)}` };
     }
+  }
+
+  /**
+   * Attempts to execute plan step using live prompt + Gemini, falls back to rule-based parsing
+   */
+  private async executeWithLivePrompt(description: string, toolRegistry: any): Promise<string[]> {
+    // Try live prompt path first
+    if (this.geminiChat) {
+      try {
+        // Load prompt from mind folder
+        const prompt = await loadPrompt('packages/core/src/mind/drive.prompt.ts');
+        
+        if (prompt) {
+          // Progress: 30% - Prompt loaded, calling Gemini
+          this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 30 } });
+
+          const response = await withRetries(
+            () => withTimeout(this.geminiChat!.sendMessage(
+              {
+                message: `${prompt}
+
+Plan Step Description: "${description}"`
+              },
+              'drive-execution'
+            ), 60_000),
+            3
+          );
+
+          // Progress: 60% - Gemini response received
+          this.bus.publish({ ts: Date.now(), type: 'progress', payload: { percent: 60 } });
+
+          // Parse JSON response
+          const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (responseText) {
+            try {
+              const toolInstruction = JSON.parse(responseText);
+              const artifacts = await this.executeToolInstruction(toolInstruction, toolRegistry);
+              // Success - return artifacts from live prompt path
+              return artifacts;
+            } catch (parseError) {
+              this.bus.publish({ 
+                ts: Date.now(), 
+                type: 'error', 
+                payload: { 
+                  agent: 'DRIVE', 
+                  message: `Failed to parse Gemini JSON response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                  stack: parseError instanceof Error ? parseError.stack : undefined
+                } 
+              });
+              this.bus.publish({ 
+                ts: Date.now(), 
+                type: 'log', 
+                payload: `Failed to parse Gemini JSON response, falling back to rule-based parsing` 
+              });
+            }
+          } else {
+            this.bus.publish({ 
+              ts: Date.now(), 
+              type: 'error', 
+              payload: { 
+                agent: 'DRIVE', 
+                message: 'Empty response from Gemini',
+                stack: undefined
+              } 
+            });
+            this.bus.publish({ 
+              ts: Date.now(), 
+              type: 'log', 
+              payload: `Empty Gemini response, falling back to rule-based parsing` 
+            });
+          }
+        } else {
+          this.bus.publish({ 
+            ts: Date.now(), 
+            type: 'log', 
+            payload: `Prompt not found, using rule-based parsing` 
+          });
+        }
+      } catch (geminiError) {
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'error', 
+          payload: { 
+            agent: 'DRIVE', 
+            message: geminiError instanceof Error ? geminiError.message : String(geminiError),
+            stack: geminiError instanceof Error ? geminiError.stack : undefined
+          } 
+        });
+        this.bus.publish({ 
+          ts: Date.now(), 
+          type: 'log', 
+          payload: `Gemini error: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}, falling back to rule-based parsing` 
+        });
+      }
+    }
+
+    // Fallback to rule-based parsing - this can still throw errors that should propagate
+    try {
+      return await this.executeWithRuleBasedParsing(description, toolRegistry);
+    } catch (fallbackError) {
+      // Rule-based parsing also failed - this is a terminal failure
+      this.bus.publish({ 
+        ts: Date.now(), 
+        type: 'error', 
+        payload: { 
+          agent: 'DRIVE', 
+          message: `Rule-based parsing failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+          stack: fallbackError instanceof Error ? fallbackError.stack : undefined
+        } 
+      });
+      throw fallbackError; // Re-throw to trigger the main catch block
+    }
+  }
+
+  /**
+   * Executes a tool instruction from Gemini JSON response
+   */
+  private async executeToolInstruction(instruction: any, toolRegistry: any): Promise<string[]> {
+    if (!instruction.tool || !instruction.args) {
+      throw new Error('Invalid tool instruction format');
+    }
+
+    const { tool, args } = instruction;
+    
+    // Get the tool from registry
+    const toolInstance = toolRegistry.getTool(tool);
+    if (!toolInstance) {
+      throw new Error(`Tool '${tool}' not found in registry`);
+    }
+
+    // Execute the tool
+    const abortController = new AbortController();
+    await toolInstance.execute(args, abortController.signal);
+
+    // Return appropriate artifacts based on tool type
+    switch (tool) {
+      case 'write_file':
+        return [args.file_path];
+      case 'exec_shell':
+        return [args.command];
+      default:
+        return [tool]; // Fallback: return tool name as artifact
+    }
+  }
+
+  /**
+   * Fallback execution using the original rule-based command parsing
+   */
+  private async executeWithRuleBasedParsing(description: string, toolRegistry: any): Promise<string[]> {
+    // Parse and execute commands using original logic
+    const commands = this.parseCommands(description);
+    const artifacts: string[] = [];
+    
+    if (commands.length === 0) {
+      return artifacts; // No commands to execute
+    }
+    
+    // Execute each command with progress tracking
+    for (let i = 0; i < commands.length; i++) {
+      const command = commands[i];
+      const progressPercent = Math.round(70 + ((i + 1) / commands.length) * 30); // 70-100%
+      
+      // Execute the command
+      const commandArtifacts = await this.executeCommand(command, toolRegistry);
+      artifacts.push(...commandArtifacts);
+      
+      // Publish progress after each command
+      this.bus.publish({ 
+        ts: Date.now(), 
+        type: 'progress', 
+        payload: { percent: progressPercent } 
+      });
+    }
+    
+    return artifacts;
   }
 
   private parseCommands(description: string): Array<{ verb: string; args: string }> {
